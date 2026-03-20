@@ -1,4 +1,4 @@
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate
 
 QA_SYSTEM_PROMPT = """你是一个知识体系助手，帮助用户建立和管理个人知识体系。
 

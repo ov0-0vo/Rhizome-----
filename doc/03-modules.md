@@ -12,7 +12,9 @@
 | openai_api_key | `OPENAI_API_KEY` | `""` | API 密钥 |
 | openai_api_base | `OPENAI_API_BASE` | `""` | API 基础 URL |
 | openai_model | `OPENAI_MODEL` | `gpt-3.5-turbo` | 模型名称 |
-| embedding_model | `EMBEDDING_MODEL` | `text-embedding-ada-002` | 嵌入模型 |
+| embedding_provider | `EMBEDDING_PROVIDER` | `local` | 嵌入模型供应商 |
+| embedding_model | `EMBEDDING_MODEL` | `BAAI/bge-small-zh-v1.5` | 嵌入模型名称 |
+| embedding_api_key | `EMBEDDING_API_KEY` | `""` | 嵌入 API 密钥 |
 | embedding_api_base | `EMBEDDING_API_BASE` | `""` | 嵌入 API URL |
 | max_tokens | - | `2000` | 最大 token 数 |
 | temperature | - | `0.7` | 生成温度 |
@@ -243,7 +245,7 @@ storage.update_item(item)
 
 ### 3.4.2 Vector Store
 
-基于 Chroma 的向量存储。
+基于 Chroma 的向量存储，支持 HuggingFace 本地嵌入模型。
 
 ```python
 from knowledge_agent.storage.vector_store import VectorStoreManager
@@ -265,6 +267,12 @@ results = vector_store.search(
     catalog_id="ml-001"
 )
 ```
+
+**嵌入模型优化**：
+
+- **本地缓存**：HuggingFace 模型自动下载到 `~/.cache/huggingface/hub`
+- **离线模式**：设置 `HF_HUB_OFFLINE=1`，避免每次初始化都检查远程
+- **智能降级**：如本地无模型，自动尝试远程下载（首次运行时）
 
 ## 3.5 UI 模块 (ui/)
 

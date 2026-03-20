@@ -12,8 +12,12 @@ class Config:
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
     openai_api_base: str = os.getenv("OPENAI_API_BASE", "")
     openai_model: str = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
-    embedding_model: str = os.getenv("EMBEDDING_MODEL", "text-embedding-ada-002")
+    
+    embedding_provider: str = os.getenv("EMBEDDING_PROVIDER", "local")
+    embedding_model: str = os.getenv("EMBEDDING_MODEL", "BAAI/bge-large-zh-v1.5")
+    embedding_api_key: str = os.getenv("EMBEDDING_API_KEY", "")
     embedding_api_base: str = os.getenv("EMBEDDING_API_BASE", "")
+    
     data_dir: str = "data"
     catalog_file: str = "data/catalog.json"
     vector_store_dir: str = "data/vector_store"
@@ -23,3 +27,4 @@ class Config:
 
 
 config = Config()
+

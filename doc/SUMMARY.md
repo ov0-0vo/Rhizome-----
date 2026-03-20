@@ -10,6 +10,7 @@
 6. [配置指南](06-configuration.md)
 7. [部署指南](07-deployment.md)
 8. [开发指南](08-development.md)
+9. [HuggingFace 模型缓存优化](09-huggingface-cache.md)
 
 ## 快速链接
 

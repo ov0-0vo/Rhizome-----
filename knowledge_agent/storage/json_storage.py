@@ -3,7 +3,7 @@ import os
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 
-from .models import KnowledgeCatalog, KnowledgeItem
+from ..knowledge.models import KnowledgeCatalog, KnowledgeItem
 
 
 class CatalogStorage:

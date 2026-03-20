@@ -3,8 +3,8 @@ from typing import List, Dict, Any, Optional, Tuple
 from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
 from langchain_community.chat_models import ChatOllama
-from langchain.chains import LLMChain
-from langchain.schema import HumanMessage
+from langchain_core.runnables import RunnableSequence
+from langchain_core.messages import HumanMessage
 
 from .prompt_templates import (
     QUESTION_ANALYSIS_PROMPT,
@@ -21,7 +21,7 @@ from ..config import config
 
 def create_llm():
     provider = config.provider.lower()
-    
+
     if provider == "openai":
         return ChatOpenAI(
             model=config.openai_model,
@@ -60,16 +60,23 @@ def create_llm():
         )
 
 
+def create_chain(prompt, llm) -> RunnableSequence:
+    return prompt | llm 
+
+
 class QAAgent:
     def __init__(self):
         self.llm = create_llm()
         self.catalog_manager = CatalogManager()
         self.knowledge_store = KnowledgeStore()
+        self._question_analysis_chain = create_chain(QUESTION_ANALYSIS_PROMPT, self.llm)
+        self._catalog_matching_chain = create_chain(CATALOG_MATCHING_PROMPT, self.llm)
+        self._knowledge_summarization_chain = create_chain(KNOWLEDGE_SUMMARIZATION_PROMPT, self.llm)
+        self._answer_with_context_chain = create_chain(ANSWER_WITH_CONTEXT_PROMPT, self.llm)
 
     def analyze_question(self, question: str) -> Dict[str, Any]:
-        chain = LLMChain(llm=self.llm, prompt=QUESTION_ANALYSIS_PROMPT)
         try:
-            result = chain.run(question=question).strip()
+            result = self._question_analysis_chain.invoke({"question": question}).content.strip()
             return json.loads(result)
         except:
             return {
@@ -81,39 +88,40 @@ class QAAgent:
 
     def match_catalog(self, question: str) -> Tuple[Optional[str], Optional[str]]:
         catalogs = self.catalog_manager.get_catalogs_summary()
-        
+
         if not catalogs:
             return None, None
-        
+
         catalogs_text = "\n".join([
             f"- ID: {c['id']}, 名称: {c['name']}, 关键词: {', '.join(c['keywords'])}"
             for c in catalogs
         ])
-        
-        chain = LLMChain(llm=self.llm, prompt=CATALOG_MATCHING_PROMPT)
+
         try:
-            result = chain.run(question=question, catalogs=catalogs_text).strip()
+            result = self._catalog_matching_chain.invoke(
+                {"question": question, "catalogs": catalogs_text}
+            ).content.strip()
             match_result = json.loads(result)
-            
+
             if match_result.get("matched_catalog_id"):
                 return match_result["matched_catalog_id"], match_result.get("reason")
-            
+
             if match_result.get("new_category_suggestion"):
                 new_catalog = self.catalog_manager.create_catalog(
                     name=match_result["new_category_suggestion"],
                     keywords=match_result.get("keywords", [])
                 )
                 return new_catalog.id, "新创建的目录"
-            
+
         except:
             pass
-        
+
         matched = self.catalog_manager.match_catalog_by_keywords(
             self.analyze_question(question).get("keywords", [])
         )
         if matched:
             return matched.id, "关键词匹配"
-        
+
         return None, None
 
     def retrieve_knowledge(
@@ -124,7 +132,7 @@ class QAAgent:
         if catalog_id:
             all_catalog_ids = self.catalog_manager.get_all_descendant_ids(catalog_id)
             return self.knowledge_store.search_by_catalog_tree(question, all_catalog_ids)
-        
+
         return self.knowledge_store.search(question, n_results=config.top_k)
 
     def generate_answer(
@@ -137,17 +145,18 @@ class QAAgent:
                 f"【相关知识 {i+1}】\n问题: {k['question']}\n答案: {k['answer']}"
                 for i, k in enumerate(context_knowledge)
             ])
-            
-            chain = LLMChain(llm=self.llm, prompt=ANSWER_WITH_CONTEXT_PROMPT)
-            answer = chain.run(context=context, question=question)
+
+            answer = self._answer_with_context_chain.invoke(
+                {"context": context, "question": question}
+            ).content
         else:
             messages = [
-                {"role": "system", "content": QA_SYSTEM_PROMPT},
-                {"role": "user", "content": question}
+                HumanMessage(content=QA_SYSTEM_PROMPT),
+                HumanMessage(content=question)
             ]
-            response = self.llm(messages)
+            response = self.llm.invoke(messages)
             answer = response.content
-        
+
         return answer.strip()
 
     def extract_knowledge_metadata(
@@ -155,9 +164,10 @@ class QAAgent:
         question: str,
         answer: str
     ) -> Dict[str, Any]:
-        chain = LLMChain(llm=self.llm, prompt=KNOWLEDGE_SUMMARIZATION_PROMPT)
         try:
-            result = chain.run(question=question, answer=answer).strip()
+            result = self._knowledge_summarization_chain.invoke(
+                {"question": question, "answer": answer}
+            ).content.strip()
             return json.loads(result)
         except:
             return {
@@ -236,3 +246,43 @@ class QAAgent:
                 item.catalog_id, knowledge_id
             )
         self.knowledge_store.delete_knowledge(knowledge_id)
+
+
+# if __name__ == "__main__":
+#     print("=" * 50)
+#     print("QAAgent 对话功能测试")
+#     print("=" * 50)
+    
+#     print(f"\n配置信息:")
+#     print(f"  Provider: {config.provider}")
+#     print(f"  Model: {config.openai_model}")
+#     print(f"  API Base: {config.openai_api_base}")
+    
+#     print("\n正在初始化 QAAgent...")
+#     try:
+#         agent = QAAgent()
+#         print("QAAgent 初始化成功!")
+#     except Exception as e:
+#         print(f"QAAgent 初始化失败: {e}")
+#         exit(1)
+    
+#     test_questions = [
+#         "你好，请介绍一下你自己",
+#         "什么是 Python？",
+#     ]
+    
+#     for i, question in enumerate(test_questions, 1):
+#         print(f"\n{'='*50}")
+#         print(f"测试 {i}: {question}")
+#         print("-" * 50)
+#         try:
+#             result = agent.chat(question)
+#             print(f"回答: {result['answer'][:200]}..." if len(result['answer']) > 200 else f"回答: {result['answer']}")
+#             print(f"来源: {result['source']}")
+#             print(f"是否新知识: {result['is_new']}")
+#         except Exception as e:
+#             print(f"测试失败: {e}")
+    
+#     print("\n" + "=" * 50)
+#     print("测试完成!")
+#     print("=" * 50)

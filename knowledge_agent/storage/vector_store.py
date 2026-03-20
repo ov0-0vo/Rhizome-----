@@ -1,34 +1,52 @@
+import os
 import chromadb
 from chromadb.config import Settings
 from typing import List, Dict, Any, Optional
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.embeddings import OllamaEmbeddings
-from langchain.schema import Document
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_core.documents import Document
 
 from knowledge_agent.config import config
 
+os.environ["HF_HUB_OFFLINE"] = "1"
+
 
 def create_embeddings():
-    provider = config.provider.lower()
+    embedding_provider = config.embedding_provider.lower()
     
-    if provider == "ollama":
+    if embedding_provider == "local":
+        return HuggingFaceEmbeddings(
+            model_name=config.embedding_model,
+            model_kwargs={"device": "cpu"},
+            encode_kwargs={"normalize_embeddings": True},
+            cache_folder=os.path.expanduser("~/.cache/huggingface/hub")
+        )
+    elif embedding_provider == "openai":
+        return OpenAIEmbeddings(
+            model=config.embedding_model,
+            openai_api_key=config.embedding_api_key or config.openai_api_key,
+            base_url=config.embedding_api_base if config.embedding_api_base else None
+        )
+    elif embedding_provider == "ollama":
         return OllamaEmbeddings(
             model=config.embedding_model,
             base_url=config.embedding_api_base if config.embedding_api_base else "http://localhost:11434"
         )
-    elif provider == "azure":
+    elif embedding_provider == "azure":
         return OpenAIEmbeddings(
             model=config.embedding_model,
-            openai_api_key=config.openai_api_key,
+            openai_api_key=config.embedding_api_key or config.openai_api_key,
             api_base=config.embedding_api_base if config.embedding_api_base else f"{config.openai_api_base}/openai",
             api_version="2024-02-01",
             deployment=config.embedding_model
         )
     else:
-        return OpenAIEmbeddings(
-            model=config.embedding_model,
-            openai_api_key=config.openai_api_key,
-            base_url=config.embedding_api_base if config.embedding_api_base else None
+        return HuggingFaceEmbeddings(
+            model_name=config.embedding_model,
+            model_kwargs={"device": "gpu"},
+            encode_kwargs={"normalize_embeddings": True},
+            cache_folder=os.path.expanduser("~/.cache/huggingface/hub")
         )
 
 
