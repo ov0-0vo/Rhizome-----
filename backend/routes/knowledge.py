@@ -81,11 +81,7 @@ async def search_knowledge(query: str, limit: int = 5):
 async def get_knowledge_by_catalog(catalog_id: str):
     from ..dependencies import get_state
     current_state = get_state()
-    
     items = current_state.knowledge_store.get_knowledge_by_catalog(catalog_id)
-    
-    print(f"[DEBUG] get_knowledge_by_catalog: catalog_id={catalog_id}, found={len(items)} items")
-    
     return [
         KnowledgeItem(
             id=item.id,

@@ -64,11 +64,15 @@ def create_chain(prompt, llm) -> RunnableSequence:
 
 
 class QAAgent:
-    def __init__(self):
+    def __init__(
+        self,
+        catalog_manager: CatalogManager = None,
+        knowledge_store: KnowledgeStore = None
+    ):
         self.llm = create_llm(streaming=True)
         self.llm_non_streaming = create_llm(streaming=False)
-        self.catalog_manager = CatalogManager()
-        self.knowledge_store = KnowledgeStore()
+        self.catalog_manager = catalog_manager or CatalogManager()
+        self.knowledge_store = knowledge_store or KnowledgeStore()
         self._question_analysis_chain = create_chain(QUESTION_ANALYSIS_PROMPT, self.llm_non_streaming)
         self._catalog_matching_chain = create_chain(CATALOG_MATCHING_PROMPT, self.llm_non_streaming)
         self._knowledge_summarization_chain = create_chain(KNOWLEDGE_SUMMARIZATION_PROMPT, self.llm_non_streaming)
