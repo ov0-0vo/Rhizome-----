@@ -1,21 +1,28 @@
 import os
+# 必须在导入 HuggingFaceEmbeddings 之前设置离线模式
+os.environ["HF_HUB_OFFLINE"] = "1"
+# 禁用 HF 的 symlink 警告
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+
 import chromadb
 from chromadb.config import Settings
 from typing import List, Dict, Any, Optional
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.embeddings import OllamaEmbeddings
-from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_core.documents import Document
-
 from knowledge_agent.config import config
 
-os.environ["HF_HUB_OFFLINE"] = "1"
+# 延迟导入 HuggingFaceEmbeddings，确保环境变量已设置
+def _get_hf_embeddings_class():
+    from langchain_community.embeddings import HuggingFaceEmbeddings
+    return HuggingFaceEmbeddings
 
 
 def create_embeddings():
     embedding_provider = config.embedding_provider.lower()
     
     if embedding_provider == "local":
+        HuggingFaceEmbeddings = _get_hf_embeddings_class()
         return HuggingFaceEmbeddings(
             model_name=config.embedding_model,
             model_kwargs={"device": "cpu"},
@@ -42,6 +49,7 @@ def create_embeddings():
             deployment=config.embedding_model
         )
     else:
+        HuggingFaceEmbeddings = _get_hf_embeddings_class()
         return HuggingFaceEmbeddings(
             model_name=config.embedding_model,
             model_kwargs={"device": "gpu"},

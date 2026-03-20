@@ -3,8 +3,7 @@ echo Starting Rhizome Backend...
 start cmd /k "uv run uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload"
 
 echo Starting Rhizome Frontend...
-cd frontend
-start cmd /k "npm run dev"
+start cmd /k "cd frontend && npm run dev"
 
 echo.
 echo Backend: http://localhost:8000

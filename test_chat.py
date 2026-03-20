@@ -26,8 +26,8 @@ def test_chat():
         return
     
     test_questions = [
-        "我是谁？",
-        "我喜欢什么？",
+        "你是谁？",
+        "我喜欢冰淇淋？",
     ]
     
     for i, question in enumerate(test_questions, 1):

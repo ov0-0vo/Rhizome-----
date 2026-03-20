@@ -1,5 +1,6 @@
 import json
-from typing import List, Dict, Any, Optional, Tuple
+import threading
+from typing import List, Dict, Any, Optional, Tuple, Iterator
 from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
 from langchain_community.chat_models import ChatOllama
@@ -19,17 +20,20 @@ from ..knowledge.models import KnowledgeItem
 from ..config import config
 
 
-def create_llm():
+def create_llm(streaming: bool = True):
     provider = config.provider.lower()
 
+    common_kwargs = {
+        "model": config.openai_model,
+        "api_key": config.openai_api_key,
+        "base_url": config.openai_api_base if config.openai_api_base else None,
+        "max_tokens": config.max_tokens,
+        "temperature": config.temperature,
+        "streaming": streaming
+    }
+
     if provider == "openai":
-        return ChatOpenAI(
-            model=config.openai_model,
-            api_key=config.openai_api_key,
-            base_url=config.openai_api_base if config.openai_api_base else None,
-            max_tokens=config.max_tokens,
-            temperature=config.temperature
-        )
+        return ChatOpenAI(**common_kwargs)
     elif provider == "anthropic":
         return ChatAnthropic(
             model=config.openai_model,
@@ -48,16 +52,11 @@ def create_llm():
             base_url=config.openai_api_base,
             api_version="2024-02-01",
             max_tokens=config.max_tokens,
-            temperature=config.temperature
+            temperature=config.temperature,
+            streaming=streaming
         )
     else:
-        return ChatOpenAI(
-            model=config.openai_model,
-            api_key=config.openai_api_key,
-            base_url=config.openai_api_base if config.openai_api_base else None,
-            max_tokens=config.max_tokens,
-            temperature=config.temperature
-        )
+        return ChatOpenAI(**common_kwargs)
 
 
 def create_chain(prompt, llm) -> RunnableSequence:
@@ -66,13 +65,14 @@ def create_chain(prompt, llm) -> RunnableSequence:
 
 class QAAgent:
     def __init__(self):
-        self.llm = create_llm()
+        self.llm = create_llm(streaming=True)
+        self.llm_non_streaming = create_llm(streaming=False)
         self.catalog_manager = CatalogManager()
         self.knowledge_store = KnowledgeStore()
-        self._question_analysis_chain = create_chain(QUESTION_ANALYSIS_PROMPT, self.llm)
-        self._catalog_matching_chain = create_chain(CATALOG_MATCHING_PROMPT, self.llm)
-        self._knowledge_summarization_chain = create_chain(KNOWLEDGE_SUMMARIZATION_PROMPT, self.llm)
-        self._answer_with_context_chain = create_chain(ANSWER_WITH_CONTEXT_PROMPT, self.llm)
+        self._question_analysis_chain = create_chain(QUESTION_ANALYSIS_PROMPT, self.llm_non_streaming)
+        self._catalog_matching_chain = create_chain(CATALOG_MATCHING_PROMPT, self.llm_non_streaming)
+        self._knowledge_summarization_chain = create_chain(KNOWLEDGE_SUMMARIZATION_PROMPT, self.llm_non_streaming)
+        self._answer_with_context_chain = create_chain(ANSWER_WITH_CONTEXT_PROMPT, self.llm_non_streaming)
 
     def analyze_question(self, question: str) -> Dict[str, Any]:
         try:
@@ -138,7 +138,8 @@ class QAAgent:
     def generate_answer(
         self,
         question: str,
-        context_knowledge: List[Dict[str, Any]] = None
+        context_knowledge: List[Dict[str, Any]] = None,
+        stream: bool = False
     ) -> str:
         if context_knowledge:
             context = "\n\n".join([
@@ -146,18 +147,30 @@ class QAAgent:
                 for i, k in enumerate(context_knowledge)
             ])
 
-            answer = self._answer_with_context_chain.invoke(
-                {"context": context, "question": question}
-            ).content
+            prompt_input = {"context": context, "question": question}
+            return self._answer_with_context_chain.invoke(prompt_input).content
         else:
             messages = [
                 HumanMessage(content=QA_SYSTEM_PROMPT),
                 HumanMessage(content=question)
             ]
-            response = self.llm.invoke(messages)
-            answer = response.content
+            return self.llm_non_streaming.invoke(messages).content
 
-        return answer.strip()
+    def _stream_answer(self, chain, prompt_input: Dict) -> Iterator[str]:
+        for chunk in chain.stream(prompt_input):
+            if chunk.content:
+                yield chunk.content
+
+    def _stream_llm_response(self, llm, messages: List) -> Iterator[str]:
+        for chunk in llm.stream(messages):
+            if chunk.content:
+                yield chunk.content
+
+    def _collect_stream(self, stream_iter: Iterator[str]) -> str:
+        full_response = ""
+        for chunk in stream_iter:
+            full_response += chunk
+        return full_response
 
     def extract_knowledge_metadata(
         self,
@@ -177,48 +190,93 @@ class QAAgent:
             }
 
     def chat(self, question: str) -> Dict[str, Any]:
-        similar = self.knowledge_store.find_similar_question(question)
-        if similar:
-            return {
-                "answer": similar.answer,
-                "source": "existing_knowledge",
-                "knowledge_id": similar.id,
-                "catalog_id": similar.catalog_id,
-                "is_new": False
-            }
-        
         analysis = self.analyze_question(question)
-        
         catalog_id, match_reason = self.match_catalog(question)
-        
         context_knowledge = self.retrieve_knowledge(question, catalog_id)
-        
-        answer = self.generate_answer(question, context_knowledge)
-        
-        knowledge_metadata = self.extract_knowledge_metadata(question, answer)
-        
-        keywords = list(set(analysis.get("keywords", []) + knowledge_metadata.get("keywords", [])))
-        
-        knowledge_item = self.knowledge_store.add_knowledge(
-            question=question,
-            answer=answer,
-            catalog_id=catalog_id,
-            keywords=keywords
-        )
-        
-        if catalog_id:
-            self.catalog_manager.add_knowledge_to_catalog(catalog_id, knowledge_item.id)
-        
+        answer = self.generate_answer(question, context_knowledge, stream=False)
+
+        threading.Thread(
+            target=self._background_store,
+            args=(question, answer, catalog_id, match_reason, analysis),
+            daemon=True
+        ).start()
+
         return {
             "answer": answer,
             "source": "generated",
-            "knowledge_id": knowledge_item.id,
             "catalog_id": catalog_id,
             "match_reason": match_reason,
             "analysis": analysis,
-            "metadata": knowledge_metadata,
             "is_new": True
         }
+
+    def chat_with_stream(self, question: str) -> Tuple[Iterator[str], Dict[str, Any]]:
+        analysis = self.analyze_question(question)
+        catalog_id, match_reason = self.match_catalog(question)
+        context_knowledge = self.retrieve_knowledge(question, catalog_id)
+
+        metadata = {
+            "catalog_id": catalog_id,
+            "match_reason": match_reason,
+            "analysis": analysis,
+            "is_new": True
+        }
+
+        def answer_stream():
+            full_answer = ""
+            stream_iter = self._generate_stream(question, context_knowledge)
+            for chunk in stream_iter:
+                full_answer += chunk
+                yield chunk
+
+            threading.Thread(
+                target=self._background_store,
+                args=(question, full_answer, catalog_id, match_reason, analysis),
+                daemon=True
+            ).start()
+
+        return answer_stream(), metadata
+
+    def _generate_stream(self, question: str, context_knowledge: List[Dict[str, Any]] = None) -> Iterator[str]:
+        if context_knowledge:
+            context = "\n\n".join([
+                f"【相关知识 {i+1}】\n问题: {k['question']}\n答案: {k['answer']}"
+                for i, k in enumerate(context_knowledge)
+            ])
+            prompt_input = {"context": context, "question": question}
+            for chunk in self._stream_answer(self._answer_with_context_chain, prompt_input):
+                yield chunk
+        else:
+            messages = [
+                HumanMessage(content=QA_SYSTEM_PROMPT),
+                HumanMessage(content=question)
+            ]
+            for chunk in self._stream_llm_response(self.llm, messages):
+                yield chunk
+
+    def _background_store(
+        self,
+        question: str,
+        answer: str,
+        catalog_id: Optional[str],
+        match_reason: Optional[str],
+        analysis: Dict[str, Any]
+    ):
+        try:
+            knowledge_metadata = self.extract_knowledge_metadata(question, answer)
+            keywords = list(set(analysis.get("keywords", []) + knowledge_metadata.get("keywords", [])))
+
+            knowledge_item = self.knowledge_store.add_knowledge(
+                question=question,
+                answer=answer,
+                catalog_id=catalog_id,
+                keywords=keywords
+            )
+
+            if catalog_id:
+                self.catalog_manager.add_knowledge_to_catalog(catalog_id, knowledge_item.id)
+        except Exception as e:
+            print(f"Background store error: {e}")
 
     def get_knowledge_tree(self) -> Dict[str, Any]:
         return self.catalog_manager.get_catalog_tree()

@@ -14,7 +14,9 @@
           </div>
         </div>
       </div>
-      <div v-if="loading" class="loading"></div>
+      <div v-if="loading" class="loading">
+        <span class="loading-text">正在思考中...</span>
+      </div>
     </div>
 
     <div class="chat-input">
@@ -37,7 +39,7 @@
 </template>
 
 <script setup>
-import { ref, nextTick } from 'vue'
+import { ref, nextTick, onMounted } from 'vue'
 import { marked } from 'marked'
 import { chatApi } from '../api'
 
@@ -45,6 +47,7 @@ const messages = ref([])
 const inputMessage = ref('')
 const loading = ref(false)
 const messagesContainer = ref(null)
+const useStream = ref(true)
 
 const formatMarkdown = (text) => {
   return marked(text)
@@ -58,6 +61,29 @@ const scrollToBottom = () => {
   })
 }
 
+const loadHistory = async () => {
+  try {
+    const response = await chatApi.getHistory(20)
+    const historyItems = response.data.reverse()
+    
+    historyItems.forEach(item => {
+      messages.value.push({
+        role: 'user',
+        content: item.question
+      })
+      messages.value.push({
+        role: 'assistant',
+        content: item.answer,
+        catalogName: item.catalog_name
+      })
+    })
+    
+    scrollToBottom()
+  } catch (error) {
+    console.error('Failed to load history:', error)
+  }
+}
+
 const sendMessage = async () => {
   if (!inputMessage.value.trim() || loading.value) return
 
@@ -67,8 +93,42 @@ const sendMessage = async () => {
   loading.value = true
   scrollToBottom()
 
+  if (useStream.value) {
+    sendStreamMessage(userMessage)
+  } else {
+    sendNormalMessage(userMessage)
+  }
+}
+
+const sendStreamMessage = (message) => {
+  const assistantMessage = { role: 'assistant', content: '', catalogName: null }
+  messages.value.push(assistantMessage)
+  const messageIndex = messages.value.length - 1
+
+  chatApi.sendStreamPost(
+    message,
+    (chunk) => {
+      messages.value[messageIndex].content += chunk
+      scrollToBottom()
+    },
+    (metadata) => {
+      if (metadata && metadata.catalog_name) {
+        messages.value[messageIndex].catalogName = metadata.catalog_name
+      }
+      loading.value = false
+      scrollToBottom()
+    },
+    (error) => {
+      messages.value[messageIndex].content = '抱歉，处理您的问题时出现错误：' + error
+      loading.value = false
+      scrollToBottom()
+    }
+  )
+}
+
+const sendNormalMessage = async (message) => {
   try {
-    const response = await chatApi.send(userMessage)
+    const response = await chatApi.send(message)
     messages.value.push({
       role: 'assistant',
       content: response.data.answer,
@@ -84,6 +144,10 @@ const sendMessage = async () => {
     scrollToBottom()
   }
 }
+
+onMounted(() => {
+  loadHistory()
+})
 </script>
 
 <style scoped>
@@ -145,5 +209,16 @@ const sendMessage = async () => {
 .chat-input .input {
   flex: 1;
   resize: none;
+}
+
+.loading {
+  display: flex;
+  justify-content: center;
+  padding: 16px;
+}
+
+.loading-text {
+  color: var(--text-secondary);
+  font-style: italic;
 }
 </style>
