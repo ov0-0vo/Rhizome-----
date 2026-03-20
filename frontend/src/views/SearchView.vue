@@ -28,18 +28,50 @@
           v-for="item in results" 
           :key="item.id" 
           class="result-item"
+          @click="selectedKnowledge = item"
         >
           <h3 class="question">{{ item.question }}</h3>
           <p class="answer">{{ truncate(item.answer, 200) }}</p>
           <div class="meta">
             <span class="similarity">相似度: {{ (item.similarity * 100).toFixed(1) }}%</span>
-            <span v-if="item.catalog_id" class="catalog">📁 {{ item.catalog_id }}</span>
+            <span v-if="item.keywords && item.keywords.length" class="keywords">
+              {{ item.keywords.slice(0, 3).join(', ') }}
+            </span>
           </div>
         </div>
       </div>
 
       <div v-else-if="searched" class="empty">
         未找到相关知识
+      </div>
+    </div>
+
+    <div v-if="selectedKnowledge" class="knowledge-detail" @click.self="selectedKnowledge = null">
+      <div class="detail-content">
+        <div class="detail-header">
+          <h3>{{ selectedKnowledge.question }}</h3>
+          <button class="close-btn" @click="selectedKnowledge = null">×</button>
+        </div>
+        <div class="detail-body">
+          <div class="detail-section">
+            <strong>回答：</strong>
+            <p>{{ selectedKnowledge.answer }}</p>
+          </div>
+          <div v-if="selectedKnowledge.keywords && selectedKnowledge.keywords.length" class="detail-section">
+            <strong>关键词：</strong>
+            <span class="keyword-tag" v-for="kw in selectedKnowledge.keywords" :key="kw">
+              {{ kw }}
+            </span>
+          </div>
+          <div class="detail-section">
+            <strong>相似度：</strong>
+            {{ (selectedKnowledge.similarity * 100).toFixed(1) }}%
+          </div>
+          <div class="detail-section">
+            <strong>创建时间：</strong>
+            {{ formatDate(selectedKnowledge.created_at) }}
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -53,6 +85,7 @@ const query = ref('')
 const results = ref([])
 const loading = ref(false)
 const searched = ref(false)
+const selectedKnowledge = ref(null)
 
 const search = async () => {
   if (!query.value.trim()) return
@@ -71,8 +104,13 @@ const search = async () => {
 }
 
 const truncate = (text, length) => {
+  if (!text) return ''
   if (text.length <= length) return text
   return text.substring(0, length) + '...'
+}
+
+const formatDate = (dateStr) => {
+  return new Date(dateStr).toLocaleString('zh-CN')
 }
 </script>
 
@@ -101,6 +139,14 @@ const truncate = (text, length) => {
   border: 1px solid var(--border-color);
   border-radius: 8px;
   margin-bottom: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.result-item:hover {
+  border-color: var(--primary-color);
+  background: var(--primary-light);
+  transform: translateX(4px);
 }
 
 .question {
@@ -124,9 +170,95 @@ const truncate = (text, length) => {
   color: var(--primary-color);
 }
 
+.keywords {
+  color: var(--text-secondary);
+}
+
 .empty {
   text-align: center;
   padding: 40px;
   color: var(--text-secondary);
+}
+
+.knowledge-detail {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.detail-content {
+  background: var(--card-bg);
+  border-radius: 12px;
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 20px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.detail-header h3 {
+  margin: 0;
+  font-size: 18px;
+  padding-right: 20px;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding: 0;
+  line-height: 1;
+}
+
+.close-btn:hover {
+  color: var(--text-primary);
+}
+
+.detail-body {
+  padding: 20px;
+}
+
+.detail-section {
+  margin-bottom: 16px;
+}
+
+.detail-section strong {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text-secondary);
+}
+
+.detail-section p {
+  margin: 0;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.keyword-tag {
+  display: inline-block;
+  background: var(--primary-light);
+  color: var(--primary-color);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  margin-right: 6px;
+  margin-bottom: 4px;
 }
 </style>
