@@ -77,6 +77,28 @@ async def search_knowledge(query: str, limit: int = 5):
     ]
 
 
+@router.get("/catalog/{catalog_id}", response_model=List[KnowledgeItem])
+async def get_knowledge_by_catalog(catalog_id: str):
+    from ..dependencies import get_state
+    current_state = get_state()
+    
+    items = current_state.knowledge_store.get_knowledge_by_catalog(catalog_id)
+    
+    print(f"[DEBUG] get_knowledge_by_catalog: catalog_id={catalog_id}, found={len(items)} items")
+    
+    return [
+        KnowledgeItem(
+            id=item.id,
+            question=item.question,
+            answer=item.answer,
+            keywords=item.keywords,
+            catalog_id=item.catalog_id,
+            created_at=item.created_at
+        )
+        for item in items
+    ]
+
+
 @router.delete("/{knowledge_id}")
 async def delete_knowledge(knowledge_id: str):
     from ..dependencies import get_state

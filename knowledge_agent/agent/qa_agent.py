@@ -90,7 +90,20 @@ class QAAgent:
         catalogs = self.catalog_manager.get_catalogs_summary()
 
         if not catalogs:
-            return None, None
+            analysis = self.analyze_question(question)
+            domain = analysis.get("domain", "general")
+            keywords = analysis.get("keywords", [])
+            
+            if domain and domain != "unknown":
+                catalog_name = self._get_catalog_name_from_domain(domain)
+            else:
+                catalog_name = "通用知识"
+            
+            new_catalog = self.catalog_manager.create_catalog(
+                name=catalog_name,
+                keywords=keywords
+            )
+            return new_catalog.id, "首个目录"
 
         catalogs_text = "\n".join([
             f"- ID: {c['id']}, 名称: {c['name']}, 关键词: {', '.join(c['keywords'])}"
@@ -123,6 +136,29 @@ class QAAgent:
             return matched.id, "关键词匹配"
 
         return None, None
+
+    def _get_catalog_name_from_domain(self, domain: str) -> str:
+        domain_names = {
+            "programming": "编程开发",
+            "technology": "科技",
+            "science": "科学",
+            "mathematics": "数学",
+            "history": "历史",
+            "literature": "文学",
+            "art": "艺术",
+            "music": "音乐",
+            "sports": "体育",
+            "health": "健康",
+            "business": "商业",
+            "finance": "金融",
+            "psychology": "心理学",
+            "philosophy": "哲学",
+            "education": "教育",
+            "travel": "旅行",
+            "food": "美食",
+            "general": "通用知识"
+        }
+        return domain_names.get(domain.lower(), domain)
 
     def retrieve_knowledge(
         self,

@@ -14,7 +14,9 @@ state = AppState()
 
 def get_state():
     if state.qa_agent is None:
-        state.qa_agent = QAAgent()
         state.catalog_manager = CatalogManager()
         state.knowledge_store = KnowledgeStore()
+        state.qa_agent = QAAgent()
+        state.qa_agent.catalog_manager = state.catalog_manager
+        state.qa_agent.knowledge_store = state.knowledge_store
     return state

@@ -108,6 +108,10 @@ export const knowledgeApi = {
     return api.get('/knowledge/search', { params: { query, limit } })
   },
 
+  getByCatalog(catalogId) {
+    return api.get(`/knowledge/catalog/${catalogId}`)
+  },
+
   delete(id) {
     return api.delete(`/knowledge/${id}`)
   }
