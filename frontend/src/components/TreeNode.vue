@@ -1,5 +1,5 @@
 <template>
-  <div class="tree-node">
+  <div class="tree-node" :class="{ 'root-node': isRoot }">
     <div class="node-content" @click="toggleNode">
       <span class="expand-icon">{{ expandIcon }}</span>
       <span class="node-name">{{ node.name }}</span>
@@ -86,6 +86,10 @@ const props = defineProps({
   node: {
     type: Object,
     required: true
+  },
+  isRoot: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -156,6 +160,10 @@ const formatDate = (dateStr) => {
 <style scoped>
 .tree-node {
   margin-left: 20px;
+}
+
+.tree-node.root-node {
+  margin-left: 0;
 }
 
 .tree-node:first-child {

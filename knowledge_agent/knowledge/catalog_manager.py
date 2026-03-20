@@ -98,8 +98,8 @@ class CatalogManager:
             return self._build_tree(root_catalogs[0])
         
         return {
-            "id": "root",
-            "name": "知识库",
+            "id": "multi-root",
+            "name": "",
             "keywords": [],
             "knowledge_count": 0,
             "children": [self._build_tree(c) for c in root_catalogs]

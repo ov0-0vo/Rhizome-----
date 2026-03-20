@@ -28,7 +28,17 @@
       </div>
 
       <div v-else class="tree-container">
-        <TreeNode :node="tree" />
+        <template v-if="tree && tree.id === 'multi-root'">
+          <TreeNode 
+            v-for="child in tree.children" 
+            :key="child.id" 
+            :node="child"
+            :is-root="true"
+          />
+        </template>
+        <template v-else>
+          <TreeNode :node="tree" :is-root="true" />
+        </template>
       </div>
     </div>
   </div>
