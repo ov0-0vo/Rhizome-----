@@ -139,7 +139,20 @@ class QAAgent:
         if matched:
             return matched.id, "关键词匹配"
 
-        return None, None
+        analysis = self.analyze_question(question)
+        domain = analysis.get("domain", "general")
+        keywords = analysis.get("keywords", [])
+        
+        if domain and domain != "unknown":
+            catalog_name = self._get_catalog_name_from_domain(domain)
+        else:
+            catalog_name = "通用知识"
+        
+        new_catalog = self.catalog_manager.create_catalog(
+            name=catalog_name,
+            keywords=keywords
+        )
+        return new_catalog.id, "新创建的目录"
 
     def _get_catalog_name_from_domain(self, domain: str) -> str:
         domain_names = {

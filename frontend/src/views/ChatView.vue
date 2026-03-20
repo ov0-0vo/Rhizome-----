@@ -1,39 +1,77 @@
 <template>
-  <div class="chat-view">
+  <div class="chat-view card">
     <div class="chat-messages" ref="messagesContainer">
+      <div v-if="messages.length === 0 && !loading" class="empty-state">
+        <div class="empty-icon">💬</div>
+        <h3>开始对话</h3>
+        <p>输入您的问题，开始构建您的知识体系</p>
+      </div>
+      
       <div 
         v-for="(msg, index) in messages" 
         :key="index" 
         class="message"
         :class="msg.role"
       >
+        <div class="message-avatar">
+          <span v-if="msg.role === 'user'">👤</span>
+          <span v-else>🤖</span>
+        </div>
         <div class="message-content">
-          <div class="message-text" v-html="formatMarkdown(msg.content)"></div>
+          <div class="message-header">
+            <span class="message-role">{{ msg.role === 'user' ? '你' : 'AI 助手' }}</span>
+          </div>
+          <div v-if="msg.role === 'assistant' && !msg.content && loading" class="typing-indicator">
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+          </div>
+          <div v-else class="message-text markdown-content" v-html="formatMarkdown(msg.content)"></div>
           <div v-if="msg.catalogName" class="catalog-tag">
-            📁 {{ msg.catalogName }}
+            <span class="catalog-icon">📁</span>
+            {{ msg.catalogName }}
           </div>
         </div>
       </div>
-      <div v-if="loading" class="loading">
-        <span class="loading-text">正在思考中...</span>
+      
+      <div v-if="loading && !hasStreamingMessage" class="message assistant">
+        <div class="message-avatar">
+          <span>🤖</span>
+        </div>
+        <div class="message-content">
+          <div class="message-header">
+            <span class="message-role">AI 助手</span>
+          </div>
+          <div class="typing-indicator">
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div class="chat-input">
-      <textarea
-        v-model="inputMessage"
-        @keydown.enter.exact.prevent="sendMessage"
-        placeholder="请输入您的问题..."
-        rows="2"
-        class="input"
-      ></textarea>
-      <button 
-        class="btn btn-primary" 
-        @click="sendMessage"
-        :disabled="loading || !inputMessage.trim()"
-      >
-        发送
-      </button>
+    <div class="chat-input-wrapper">
+      <div class="chat-input">
+        <textarea
+          v-model="inputMessage"
+          @keydown.enter.exact.prevent="sendMessage"
+          placeholder="输入您的问题，按 Enter 发送..."
+          rows="2"
+          class="input chat-textarea"
+        ></textarea>
+        <button 
+          class="btn btn-primary send-btn" 
+          @click="sendMessage"
+          :disabled="loading || !inputMessage.trim()"
+        >
+          <span class="send-icon">➤</span>
+          <span class="send-text">发送</span>
+        </button>
+      </div>
+      <div class="input-hint">
+        <span>💡 提示：问题越具体，回答越准确</span>
+      </div>
     </div>
   </div>
 </template>
@@ -48,6 +86,8 @@ const inputMessage = ref('')
 const loading = ref(false)
 const messagesContainer = ref(null)
 const useStream = ref(true)
+
+const hasStreamingMessage = ref(false)
 
 const formatMarkdown = (text) => {
   return marked(text)
@@ -101,6 +141,7 @@ const sendMessage = async () => {
 }
 
 const sendStreamMessage = (message) => {
+  hasStreamingMessage.value = true
   const assistantMessage = { role: 'assistant', content: '', catalogName: null }
   messages.value.push(assistantMessage)
   const messageIndex = messages.value.length - 1
@@ -116,11 +157,13 @@ const sendStreamMessage = (message) => {
         messages.value[messageIndex].catalogName = metadata.catalog_name
       }
       loading.value = false
+      hasStreamingMessage.value = false
       scrollToBottom()
     },
     (error) => {
       messages.value[messageIndex].content = '抱歉，处理您的问题时出现错误：' + error
       loading.value = false
+      hasStreamingMessage.value = false
       scrollToBottom()
     }
   )
@@ -154,71 +197,223 @@ onMounted(() => {
 .chat-view {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 200px);
-  min-height: 400px;
+  height: calc(100vh - 220px);
+  min-height: 450px;
+  padding: 0;
+  overflow: hidden;
 }
 
 .chat-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 20px;
-  background: var(--card-bg);
-  border-radius: 8px;
-  margin-bottom: 20px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.empty-state h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.empty-state p {
+  font-size: 14px;
 }
 
 .message {
-  margin-bottom: 16px;
   display: flex;
+  gap: 12px;
+  animation: fadeIn 0.3s ease;
 }
 
 .message.user {
-  justify-content: flex-end;
+  flex-direction: row-reverse;
 }
 
-.message.user .message-content {
-  background: var(--primary-color);
-  color: white;
+.message-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+  background: var(--bg-secondary);
 }
 
-.message.assistant .message-content {
-  background: var(--bg-color);
+.message.user .message-avatar {
+  background: var(--primary-gradient);
 }
 
 .message-content {
-  max-width: 70%;
-  padding: 12px 16px;
-  border-radius: 12px;
+  max-width: 75%;
+  min-width: 100px;
+}
+
+.message-header {
+  margin-bottom: 6px;
+}
+
+.message-role {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
 }
 
 .message-text {
-  word-break: break-word;
+  background: var(--bg-secondary);
+  padding: 14px 18px;
+  border-radius: var(--radius-lg);
+  border-top-left-radius: var(--radius-sm);
+  line-height: 1.6;
+}
+
+.message.user .message-text {
+  background: var(--primary-gradient);
+  color: white;
+  border-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-sm);
+}
+
+.message.user .message-text :deep(code) {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.message.user .message-text :deep(pre) {
+  background: rgba(0, 0, 0, 0.1);
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
 .catalog-tag {
-  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 6px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl);
   font-size: 12px;
-  opacity: 0.8;
+  color: var(--text-secondary);
+}
+
+.catalog-icon {
+  font-size: 12px;
+}
+
+.typing-indicator {
+  display: flex;
+  gap: 4px;
+  padding: 14px 18px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  border-top-left-radius: var(--radius-sm);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  background: var(--text-muted);
+  border-radius: 50%;
+  animation: bounce 1.4s infinite ease-in-out both;
+}
+
+.dot:nth-child(1) { animation-delay: -0.32s; }
+.dot:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes bounce {
+  0%, 80%, 100% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.chat-input-wrapper {
+  padding: 20px 24px;
+  border-top: 1px solid var(--border-light);
+  background: var(--bg-card);
 }
 
 .chat-input {
   display: flex;
   gap: 12px;
+  align-items: flex-end;
 }
 
-.chat-input .input {
+.chat-textarea {
   flex: 1;
   resize: none;
+  min-height: 48px;
+  max-height: 120px;
+  padding: 14px 18px;
+  font-size: 15px;
+  line-height: 1.5;
 }
 
-.loading {
-  display: flex;
-  justify-content: center;
-  padding: 16px;
+.send-btn {
+  height: 48px;
+  padding: 0 24px;
+  flex-shrink: 0;
 }
 
-.loading-text {
-  color: var(--text-secondary);
-  font-style: italic;
+.send-icon {
+  font-size: 16px;
+}
+
+.input-hint {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+@media (max-width: 768px) {
+  .chat-view {
+    height: calc(100vh - 180px);
+  }
+  
+  .chat-messages {
+    padding: 16px;
+  }
+  
+  .message-content {
+    max-width: 85%;
+  }
+  
+  .chat-input-wrapper {
+    padding: 16px;
+  }
+  
+  .send-text {
+    display: none;
+  }
+  
+  .send-btn {
+    padding: 0 16px;
+  }
 }
 </style>

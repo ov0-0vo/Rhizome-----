@@ -82,16 +82,28 @@ class CatalogManager:
         return best_match if best_score > 0 else None
 
     def get_catalog_tree(self, catalog_id: str = None) -> Dict[str, Any]:
-        if catalog_id is None:
-            root = self.get_root_catalog()
-            if root:
-                return self._build_tree(root)
+        if catalog_id is not None:
+            catalog = self.get_catalog(catalog_id)
+            if catalog:
+                return self._build_tree(catalog)
             return {}
         
-        catalog = self.get_catalog(catalog_id)
-        if catalog:
-            return self._build_tree(catalog)
-        return {}
+        all_catalogs = self.get_all_catalogs()
+        root_catalogs = [c for c in all_catalogs if c.parent_id is None]
+        
+        if not root_catalogs:
+            return {}
+        
+        if len(root_catalogs) == 1:
+            return self._build_tree(root_catalogs[0])
+        
+        return {
+            "id": "root",
+            "name": "知识库",
+            "keywords": [],
+            "knowledge_count": 0,
+            "children": [self._build_tree(c) for c in root_catalogs]
+        }
 
     def _build_tree(self, catalog: KnowledgeCatalog) -> Dict[str, Any]:
         tree = {

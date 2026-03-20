@@ -4,11 +4,19 @@
       <div class="card-header">
         <h2>📊 知识库统计</h2>
         <button class="btn btn-secondary" @click="loadStats">
-          🔄 刷新
+          <span class="btn-icon">🔄</span>
+          <span class="btn-text">刷新</span>
         </button>
       </div>
 
-      <div v-if="loading" class="loading"></div>
+      <div v-if="loading" class="loading-state">
+        <div class="skeleton-grid">
+          <div class="skeleton skeleton-card"></div>
+          <div class="skeleton skeleton-card"></div>
+          <div class="skeleton skeleton-card"></div>
+          <div class="skeleton skeleton-card"></div>
+        </div>
+      </div>
 
       <div v-else class="stats-content">
         <div class="stat-cards">
@@ -94,7 +102,7 @@
                 class="keyword-tag"
                 :style="{ fontSize: getKeywordSize(item.count) }"
               >
-                {{ item.keyword }} ({{ item.count }})
+                {{ item.keyword }} <span class="keyword-count">{{ item.count }}</span>
               </span>
               <div v-if="!stats.top_keywords || stats.top_keywords.length === 0" class="empty-list">
                 暂无关键词数据
@@ -157,7 +165,7 @@ const getBarWidth = (count) => {
 
 const getKeywordSize = (count) => {
   const max = Math.max(...stats.value.top_keywords.map(k => k.count), 1)
-  const size = 12 + (count / max) * 8
+  const size = 13 + (count / max) * 6
   return `${size}px`
 }
 
@@ -173,48 +181,74 @@ onMounted(loadStats)
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .card-header h2 {
   font-size: 18px;
   font-weight: 600;
+  color: var(--text-primary);
+}
+
+.loading-state {
+  padding: 20px;
+}
+
+.skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.skeleton-card {
+  height: 100px;
+  border-radius: var(--radius-lg);
 }
 
 .stat-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 16px;
-  margin-bottom: 24px;
+  margin-bottom: 28px;
 }
 
 .stat-card {
   display: flex;
   align-items: center;
   padding: 20px;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   color: white;
+  transition: all var(--transition-fast);
+  cursor: default;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
 }
 
 .stat-card.primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #52C41A 0%, #389E0D 100%);
 }
 
 .stat-card.success {
-  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+  background: linear-gradient(135deg, #13C2C2 0%, #08979C 100%);
 }
 
 .stat-card.warning {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  background: linear-gradient(135deg, #FAAD14 0%, #D48806 100%);
 }
 
 .stat-card.info {
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  background: linear-gradient(135deg, #73D13D 0%, #52C41A 100%);
 }
 
 .stat-icon {
   font-size: 32px;
   margin-right: 16px;
+  opacity: 0.9;
 }
 
 .stat-info {
@@ -239,8 +273,8 @@ onMounted(loadStats)
 }
 
 .stats-section {
-  background: var(--bg-color);
-  border-radius: 12px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
   padding: 20px;
 }
 
@@ -249,36 +283,37 @@ onMounted(loadStats)
 }
 
 .stats-section h3 {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   margin-bottom: 16px;
-  color: var(--text-color);
+  color: var(--text-primary);
 }
 
 .latest-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .latest-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px;
-  background: var(--card-bg);
-  border-radius: 8px;
-  transition: transform 0.2s;
+  padding: 12px 14px;
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
 }
 
 .latest-item:hover {
   transform: translateX(4px);
+  box-shadow: var(--shadow-sm);
 }
 
 .latest-question {
   flex: 1;
   font-size: 14px;
-  color: var(--text-color);
+  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -286,7 +321,7 @@ onMounted(loadStats)
 
 .latest-time {
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--text-muted);
   margin-left: 12px;
   white-space: nowrap;
 }
@@ -294,7 +329,7 @@ onMounted(loadStats)
 .distribution-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
 .distribution-item {
@@ -311,54 +346,64 @@ onMounted(loadStats)
 
 .distribution-name {
   font-size: 14px;
-  color: var(--text-color);
+  color: var(--text-primary);
 }
 
 .distribution-count {
   font-size: 12px;
+  font-weight: 500;
   color: var(--text-secondary);
 }
 
 .distribution-bar {
   height: 8px;
-  background: var(--border-color);
-  border-radius: 4px;
+  background: var(--bg-card);
+  border-radius: var(--radius-xl);
   overflow: hidden;
 }
 
 .distribution-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--primary-color), var(--primary-dark));
-  border-radius: 4px;
-  transition: width 0.3s ease;
+  background: var(--primary-gradient);
+  border-radius: var(--radius-xl);
+  transition: width 0.5s ease;
 }
 
 .keywords-cloud {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 10px;
 }
 
 .keyword-tag {
-  display: inline-block;
-  background: var(--primary-light);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-card);
   color: var(--primary-color);
-  padding: 6px 12px;
-  border-radius: 20px;
+  padding: 8px 14px;
+  border-radius: var(--radius-xl);
   font-weight: 500;
-  transition: all 0.2s;
+  transition: all var(--transition-fast);
+  border: 1px solid var(--border-color);
 }
 
 .keyword-tag:hover {
   background: var(--primary-color);
   color: white;
+  border-color: var(--primary-color);
   transform: scale(1.05);
+}
+
+.keyword-count {
+  font-size: 0.85em;
+  opacity: 0.7;
 }
 
 .empty-list {
   text-align: center;
-  padding: 20px;
-  color: var(--text-secondary);
+  padding: 24px;
+  color: var(--text-muted);
   font-size: 14px;
 }
 
@@ -369,6 +414,14 @@ onMounted(loadStats)
   
   .stat-cards {
     grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .skeleton-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .btn-text {
+    display: none;
   }
 }
 </style>

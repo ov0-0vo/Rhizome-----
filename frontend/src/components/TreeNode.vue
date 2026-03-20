@@ -3,35 +3,45 @@
     <div class="node-content" @click="toggleNode">
       <span class="expand-icon">{{ expandIcon }}</span>
       <span class="node-name">{{ node.name }}</span>
-      <span class="knowledge-count">({{ node.knowledge_count }} 条知识)</span>
+      <span class="knowledge-count" v-if="node.knowledge_count > 0">
+        {{ node.knowledge_count }}
+      </span>
     </div>
     
-    <div v-if="showChildren" class="children">
-      <TreeNode 
-        v-for="child in node.children" 
-        :key="child.id" 
-        :node="child"
-      />
-    </div>
+    <transition name="slide">
+      <div v-if="showChildren" class="children">
+        <TreeNode 
+          v-for="child in node.children" 
+          :key="child.id" 
+          :node="child"
+        />
+      </div>
+    </transition>
 
-    <div v-if="showKnowledgeList" class="knowledge-list">
-      <div 
-        v-for="item in knowledgeList" 
-        :key="item.id" 
-        class="knowledge-item"
-        @click="selectedKnowledge = item"
-      >
-        <div class="knowledge-question">{{ item.question }}</div>
-        <div class="knowledge-meta">
-          <span v-if="item.keywords && item.keywords.length" class="keywords">
-            {{ item.keywords.slice(0, 3).join(', ') }}
-          </span>
+    <transition name="slide">
+      <div v-if="showKnowledgeList" class="knowledge-list">
+        <div 
+          v-for="item in knowledgeList" 
+          :key="item.id" 
+          class="knowledge-item"
+          @click="selectedKnowledge = item"
+        >
+          <div class="knowledge-question">{{ item.question }}</div>
+          <div class="knowledge-meta">
+            <span v-if="item.keywords && item.keywords.length" class="keywords">
+              {{ item.keywords.slice(0, 2).join(' · ') }}
+            </span>
+          </div>
         </div>
       </div>
-    </div>
+    </transition>
 
     <div v-if="loadingKnowledge" class="loading-knowledge">
-      加载中...
+      <div class="loading-dots">
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+      </div>
     </div>
 
     <div v-if="showKnowledge && !loadingKnowledge && knowledgeList.length === 0 && node.knowledge_count > 0" class="no-knowledge">
@@ -51,9 +61,11 @@
           </div>
           <div v-if="selectedKnowledge.keywords && selectedKnowledge.keywords.length" class="detail-section">
             <strong>关键词：</strong>
-            <span class="keyword-tag" v-for="kw in selectedKnowledge.keywords" :key="kw">
-              {{ kw }}
-            </span>
+            <div class="keyword-list">
+              <span class="keyword-tag" v-for="kw in selectedKnowledge.keywords" :key="kw">
+                {{ kw }}
+              </span>
+            </div>
           </div>
           <div class="detail-section">
             <strong>创建时间：</strong>
@@ -153,76 +165,109 @@ const formatDate = (dateStr) => {
 .node-content {
   display: flex;
   align-items: center;
-  padding: 8px 12px;
+  padding: 10px 14px;
   cursor: pointer;
-  border-radius: 6px;
-  transition: background-color 0.2s;
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+  user-select: none;
 }
 
 .node-content:hover {
-  background-color: var(--bg-color);
+  background: var(--bg-secondary);
 }
 
 .expand-icon {
-  margin-right: 8px;
-  font-size: 16px;
+  margin-right: 10px;
+  font-size: 18px;
+  transition: transform var(--transition-fast);
 }
 
 .node-name {
   font-weight: 500;
+  font-size: 14px;
+  color: var(--text-primary);
 }
 
 .knowledge-count {
-  margin-left: 8px;
+  margin-left: auto;
   font-size: 12px;
+  font-weight: 600;
   color: var(--text-secondary);
+  background: var(--bg-secondary);
+  padding: 2px 8px;
+  border-radius: var(--radius-xl);
 }
 
 .children {
   border-left: 2px solid var(--border-color);
-  margin-left: 12px;
+  margin-left: 18px;
   padding-left: 8px;
+  margin-top: 4px;
 }
 
 .knowledge-list {
   margin-left: 28px;
   margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .knowledge-item {
-  padding: 10px 12px;
-  margin-bottom: 6px;
-  background: var(--bg-color);
-  border-radius: 6px;
+  padding: 12px 14px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition-fast);
 }
 
 .knowledge-item:hover {
-  background: var(--primary-light);
+  background: var(--bg-hover);
   transform: translateX(4px);
 }
 
 .knowledge-question {
   font-weight: 500;
-  margin-bottom: 4px;
+  font-size: 14px;
+  color: var(--text-primary);
+  margin-bottom: 6px;
 }
 
 .knowledge-meta {
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--text-muted);
 }
 
 .keywords {
   color: var(--primary-color);
 }
 
-.loading-knowledge,
+.loading-knowledge {
+  margin-left: 28px;
+  padding: 12px;
+}
+
+.loading-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.loading-dots .dot {
+  width: 8px;
+  height: 8px;
+  background: var(--text-muted);
+  border-radius: 50%;
+  animation: bounce 1.4s infinite ease-in-out both;
+}
+
+.loading-dots .dot:nth-child(1) { animation-delay: -0.32s; }
+.loading-dots .dot:nth-child(2) { animation-delay: -0.16s; }
+
 .no-knowledge {
   margin-left: 28px;
-  padding: 10px;
-  color: var(--text-secondary);
-  font-style: italic;
+  padding: 12px;
+  color: var(--text-muted);
+  font-size: 13px;
 }
 
 .knowledge-detail {
@@ -236,156 +281,112 @@ const formatDate = (dateStr) => {
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  backdrop-filter: blur(4px);
 }
 
 .detail-content {
-  background: var(--card-bg);
-  border-radius: 12px;
+  background: var(--bg-card);
+  border-radius: var(--radius-xl);
   max-width: 700px;
   width: 90%;
   max-height: 80vh;
   overflow-y: auto;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-lg);
+  animation: fadeIn 0.2s ease;
 }
 
 .detail-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  padding: 20px;
-  border-bottom: 1px solid var(--border-color);
+  padding: 24px;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .detail-header h3 {
   margin: 0;
   font-size: 18px;
+  font-weight: 600;
   padding-right: 20px;
+  color: var(--text-primary);
 }
 
 .close-btn {
-  background: none;
+  background: var(--bg-secondary);
   border: none;
-  font-size: 24px;
+  font-size: 20px;
   cursor: pointer;
   color: var(--text-secondary);
-  padding: 0;
-  line-height: 1;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
 }
 
 .close-btn:hover {
+  background: var(--bg-hover);
   color: var(--text-primary);
 }
 
 .detail-body {
-  padding: 20px;
+  padding: 24px;
 }
 
 .detail-section {
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .detail-section strong {
   display: block;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
-.markdown-content {
-  line-height: 1.8;
-  color: var(--text-color);
-}
-
-.markdown-content :deep(h1),
-.markdown-content :deep(h2),
-.markdown-content :deep(h3) {
-  margin-top: 1em;
-  margin-bottom: 0.5em;
-  color: var(--text-color);
-}
-
-.markdown-content :deep(p) {
-  margin-bottom: 1em;
-}
-
-.markdown-content :deep(ul),
-.markdown-content :deep(ol) {
-  padding-left: 2em;
-  margin-bottom: 1em;
-}
-
-.markdown-content :deep(li) {
-  margin-bottom: 0.5em;
-}
-
-.markdown-content :deep(code) {
-  background-color: #f5f5f5;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-family: 'Consolas', 'Monaco', monospace;
-  font-size: 0.9em;
-}
-
-.markdown-content :deep(pre) {
-  background-color: #f8f8f8;
-  padding: 16px;
-  border-radius: 8px;
-  overflow-x: auto;
-  margin-bottom: 1em;
-  border: 1px solid var(--border-color);
-}
-
-.markdown-content :deep(pre code) {
-  background: none;
-  padding: 0;
-}
-
-.markdown-content :deep(blockquote) {
-  border-left: 4px solid var(--primary-color);
-  padding-left: 16px;
-  margin: 1em 0;
-  color: var(--text-secondary);
-}
-
-.markdown-content :deep(table) {
-  width: 100%;
-  border-collapse: collapse;
-  margin-bottom: 1em;
-}
-
-.markdown-content :deep(th),
-.markdown-content :deep(td) {
-  border: 1px solid var(--border-color);
-  padding: 8px 12px;
-  text-align: left;
-}
-
-.markdown-content :deep(th) {
-  background-color: var(--bg-color);
-  font-weight: 600;
-}
-
-.markdown-content :deep(hr) {
-  border: none;
-  border-top: 1px solid var(--border-color);
-  margin: 1.5em 0;
-}
-
-.markdown-content :deep(strong) {
-  font-weight: 600;
-}
-
-.markdown-content :deep(em) {
-  font-style: italic;
+.keyword-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .keyword-tag {
   display: inline-block;
   background: var(--primary-light);
   color: var(--primary-color);
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  margin-right: 6px;
-  margin-bottom: 4px;
+  padding: 6px 14px;
+  border-radius: var(--radius-xl);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.slide-enter-active,
+.slide-leave-active {
+  transition: all 0.25s ease;
+}
+
+.slide-enter-from,
+.slide-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+@media (max-width: 768px) {
+  .tree-node {
+    margin-left: 12px;
+  }
+  
+  .children {
+    margin-left: 12px;
+  }
+  
+  .knowledge-list {
+    margin-left: 18px;
+  }
 }
 </style>
