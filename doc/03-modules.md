@@ -34,33 +34,54 @@ print(config.provider)       # openai
 
 ### 3.2.1 QAAgent 类
 
-`QAAgent` 是系统的核心 orchestrator，整合所有功能模块。
+`QAAgent` 是系统的核心 orchestrator，整合所有功能模块，支持流式输出和依赖注入。
 
 #### 初始化
 
 ```python
 from knowledge_agent.agent.qa_agent import QAAgent
+from knowledge_agent.knowledge.catalog_manager import CatalogManager
+from knowledge_agent.knowledge.knowledge_store import KnowledgeStore
 
-agent = QAAgent()
+# 使用依赖注入
+catalog_manager = CatalogManager()
+knowledge_store = KnowledgeStore()
+agent = QAAgent(
+    catalog_manager=catalog_manager,
+    knowledge_store=knowledge_store
+)
 ```
 
 初始化时会自动：
 
-1. 根据配置创建 LLM 实例
-2. 初始化 `CatalogManager`
-3. 初始化 `KnowledgeStore`
+1. 创建流式和非流式两个 LLM 实例
+2. 使用注入的 CatalogManager 和 KnowledgeStore
+3. 初始化各种处理链
 
 #### 核心方法
 
 **chat(question: str) -> Dict[str, Any]**
 
-处理用户提问的主入口：
+处理用户提问的主入口（非流式）：
 
 ```python
 result = agent.chat("什么是机器学习？")
 print(result["answer"])           # AI 生成的回答
 print(result["catalog_id"])      # 所属知识目录 ID
 print(result["is_new"])           # 是否是新知识
+```
+
+**chat_with_stream(question: str) -> Tuple[Iterator[str], Dict[str, Any]]**
+
+流式处理用户提问：
+
+```python
+stream_iter, metadata = agent.chat_with_stream("什么是机器学习？")
+
+for chunk in stream_iter:
+    print(chunk, end="", flush=True)  # 实时输出
+
+print(metadata["catalog_id"])  # 目录 ID
 ```
 
 **analyze_question(question: str) -> Dict[str, Any]**
@@ -95,13 +116,22 @@ results = agent.retrieve_knowledge("神经网络")
 
 **generate_answer(question: str, context_knowledge: List = None) -> str**
 
-生成回答：
+生成回答（非流式）：
 
 ```python
 answer = agent.generate_answer(
     question="什么是过拟合？",
     context_knowledge=[{"question": "...", "answer": "..."}]
 )
+```
+
+**_generate_stream(question: str, context_knowledge: List = None) -> Iterator[str]**
+
+流式生成回答：
+
+```python
+for chunk in agent._generate_stream(question, context):
+    yield chunk
 ```
 
 ### 3.2.2 提示词模板 (prompt_templates.py)
@@ -192,15 +222,12 @@ results = knowledge_store.search(
 )
 ```
 
-**search_by_catalog_tree(query, catalog_ids, n_results) -> List[Dict]**
+**get_knowledge_by_catalog(catalog_id: str) -> List[KnowledgeItem]**
 
-在目录树中搜索：
+获取目录下所有知识：
 
 ```python
-results = knowledge_store.search_by_catalog_tree(
-    query="神经网络",
-    catalog_ids=["父目录ID", "子目录ID"]
-)
+items = knowledge_store.get_knowledge_by_catalog("catalog-001")
 ```
 
 **find_similar_question(question) -> KnowledgeItem**
@@ -274,24 +301,147 @@ results = vector_store.search(
 - **离线模式**：设置 `HF_HUB_OFFLINE=1`，避免每次初始化都检查远程
 - **智能降级**：如本地无模型，自动尝试远程下载（首次运行时）
 
-## 3.5 UI 模块 (ui/)
+## 3.5 后端模块 (backend/)
 
-### 3.5.1 Gradio 应用
+### 3.5.1 FastAPI 应用
 
-基于 Gradio 的 Web 用户界面：
+基于 FastAPI 的 RESTful API 服务：
 
 ```python
-from knowledge_agent.ui.gradio_app import create_app
+# backend/main.py
+from fastapi import FastAPI
+from backend.routes import chat, knowledge, catalog
 
-app = create_app()
-app.launch(server_name="0.0.0.0", server_port=7860)
+app = FastAPI(title="Rhizome API")
+app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
+app.include_router(knowledge.router, prefix="/api/knowledge", tags=["knowledge"])
+app.include_router(catalog.router, prefix="/api/catalog", tags=["catalog"])
 ```
 
-#### 界面功能
+### 3.5.2 依赖注入
 
-| Tab | 功能 |
-|-----|------|
-| 💬 对话 | 与 Agent 对话，查看回答 |
-| 📚 知识目录 | 查看知识体系树状结构 |
-| 📊 知识统计 | 查看知识库统计信息 |
-| 🔍 知识搜索 | 搜索已有知识 |
+使用 FastAPI 的依赖注入管理状态：
+
+```python
+# backend/dependencies.py
+from knowledge_agent.agent.qa_agent import QAAgent
+from knowledge_agent.knowledge.catalog_manager import CatalogManager
+from knowledge_agent.knowledge.knowledge_store import KnowledgeStore
+
+class AppState:
+    qa_agent: QAAgent = None
+    catalog_manager: CatalogManager = None
+    knowledge_store: KnowledgeStore = None
+
+state = AppState()
+
+def get_state():
+    if state.qa_agent is None:
+        state.catalog_manager = CatalogManager()
+        state.knowledge_store = KnowledgeStore()
+        state.qa_agent = QAAgent(
+            catalog_manager=state.catalog_manager,
+            knowledge_store=state.knowledge_store
+        )
+    return state
+```
+
+### 3.5.3 SSE 流式接口
+
+使用 Server-Sent Events 实现流式响应：
+
+```python
+# backend/routes/chat.py
+from fastapi.responses import StreamingResponse
+
+@router.post("/stream")
+async def chat_stream(request: ChatRequest):
+    current_state = get_state()
+    stream_iter, metadata = current_state.qa_agent.chat_with_stream(request.message)
+    
+    async def event_generator():
+        yield f"data: {json.dumps({'type': 'metadata', 'data': metadata})}\n\n"
+        for chunk in stream_iter:
+            yield f"data: {json.dumps({'type': 'chunk', 'data': chunk})}\n\n"
+        yield f"data: {json.dumps({'type': 'done'})}\n\n"
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream"
+    )
+```
+
+## 3.6 前端模块 (frontend/)
+
+### 3.6.1 Vue 3 应用
+
+基于 Vue 3 + Vite 的单页应用：
+
+```javascript
+// frontend/src/main.js
+import { createApp } from 'vue'
+import App from './App.vue'
+
+createApp(App).mount('#app')
+```
+
+### 3.6.2 API 封装
+
+统一的 API 调用封装：
+
+```javascript
+// frontend/src/api.js
+import axios from 'axios'
+
+const api = axios.create({
+  baseURL: 'http://localhost:8000/api'
+})
+
+export const chatApi = {
+  send: (message) => api.post('/chat', { message }),
+  stream: async function* (message) {
+    const response = await fetch('/api/chat/stream', {
+      method: 'POST',
+      body: JSON.stringify({ message })
+    })
+    // SSE 处理...
+  },
+  getHistory: () => api.get('/chat/history')
+}
+
+export const knowledgeApi = {
+  getAll: () => api.get('/knowledge'),
+  search: (query) => api.get('/knowledge/search', { params: { query } }),
+  getByCatalog: (catalogId) => api.get(`/knowledge/catalog/${catalogId}`),
+  getStatistics: () => api.get('/knowledge/statistics')
+}
+```
+
+### 3.6.3 Markdown 渲染
+
+使用 marked 库渲染 Markdown：
+
+```vue
+<script setup>
+import { marked } from 'marked'
+
+const formatMarkdown = (text) => {
+  if (!text) return ''
+  return marked(text)
+}
+</script>
+
+<template>
+  <div class="markdown-content" v-html="formatMarkdown(answer)"></div>
+</template>
+```
+
+### 3.6.4 页面组件
+
+| 组件 | 功能 |
+|------|------|
+| `ChatView.vue` | 对话页面，流式输出，历史记录 |
+| `CatalogView.vue` | 知识目录树，点击查看详情 |
+| `SearchView.vue` | 知识搜索，相似度排序 |
+| `StatsView.vue` | 统计数据，可视化图表 |
+| `TreeNode.vue` | 目录树节点组件，Markdown 渲染 |

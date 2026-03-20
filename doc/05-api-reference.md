@@ -2,19 +2,27 @@
 
 ## 5.1 QAAgent 类
 
-Agent 核心类，提供所有问答和知识管理功能。
+Agent 核心类，提供所有问答和知识管理功能，支持流式输出。
 
 ### 5.1.1 初始化
 
 ```python
 from knowledge_agent.agent.qa_agent import QAAgent
+from knowledge_agent.knowledge.catalog_manager import CatalogManager
+from knowledge_agent.knowledge.knowledge_store import KnowledgeStore
 
-agent = QAAgent()
+# 使用依赖注入
+catalog_manager = CatalogManager()
+knowledge_store = KnowledgeStore()
+agent = QAAgent(
+    catalog_manager=catalog_manager,
+    knowledge_store=knowledge_store
+)
 ```
 
 ### 5.1.2 chat(question: str) -> Dict[str, Any]
 
-处理用户提问，返回回答和管理信息。
+处理用户提问，返回回答和管理信息（非流式）。
 
 **参数：**
 
@@ -41,7 +49,32 @@ result = agent.chat("什么是Python？")
 print(result["answer"])
 ```
 
-### 5.1.3 analyze_question(question: str) -> Dict[str, Any]
+### 5.1.3 chat_with_stream(question: str) -> Tuple[Iterator[str], Dict[str, Any]]
+
+流式处理用户提问，实时返回回答片段。
+
+**参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| question | str | 是 | 用户提问 |
+
+**返回值：**
+
+```python
+# 返回流式迭代器和元数据
+stream_iter, metadata = agent.chat_with_stream("什么是机器学习？")
+
+# 流式迭代器返回回答片段
+for chunk in stream_iter:
+    print(chunk, end="")
+
+# 元数据包含目录信息
+print(metadata["catalog_id"])
+print(metadata["match_reason"])
+```
+
+### 5.1.4 analyze_question(question: str) -> Dict[str, Any]
 
 分析问题，提取关键信息。
 
@@ -62,7 +95,7 @@ print(result["answer"])
 }
 ```
 
-### 5.1.4 match_catalog(question: str) -> Tuple[str, str]
+### 5.1.5 match_catalog(question: str) -> Tuple[str, str]
 
 将问题匹配到知识目录。
 
@@ -80,7 +113,7 @@ print(result["answer"])
 
 如果没有匹配，返回 `(None, None)`。
 
-### 5.1.5 retrieve_knowledge(question: str, catalog_id: str = None) -> List[Dict[str, Any]]
+### 5.1.6 retrieve_knowledge(question: str, catalog_id: str = None) -> List[Dict[str, Any]]
 
 检索相关知识。
 
@@ -104,9 +137,9 @@ print(result["answer"])
 ]
 ```
 
-### 5.1.6 generate_answer(question: str, context_knowledge: List = None) -> str
+### 5.1.7 generate_answer(question: str, context_knowledge: List = None) -> str
 
-生成 AI 回答。
+生成 AI 回答（非流式）。
 
 **参数：**
 
@@ -119,7 +152,22 @@ print(result["answer"])
 
 回答文本字符串。
 
-### 5.1.7 get_knowledge_tree() -> Dict[str, Any]
+### 5.1.8 _generate_stream(question: str, context_knowledge: List = None) -> Iterator[str]
+
+流式生成 AI 回答。
+
+**参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| question | str | 是 | 用户问题 |
+| context_knowledge | List | 否 | 上下文知识 |
+
+**返回值：**
+
+回答片段的迭代器。
+
+### 5.1.9 get_knowledge_tree() -> Dict[str, Any]
 
 获取知识目录树。
 
@@ -129,13 +177,14 @@ print(result["answer"])
 {
     "id": "root-001",
     "name": "知识体系",
+    "knowledge_count": 10,
     "children": [
-        {"id": "...", "name": "编程", "children": [...]}
+        {"id": "...", "name": "编程", "knowledge_count": 5, "children": [...]}
     ]
 }
 ```
 
-### 5.1.8 get_statistics() -> Dict[str, Any]
+### 5.1.10 get_statistics() -> Dict[str, Any]
 
 获取知识库统计。
 
@@ -145,11 +194,16 @@ print(result["answer"])
 {
     "total_knowledge": 100,
     "catalogs_count": 10,
-    "latest_knowledge": [...]
+    "today_count": 5,
+    "week_count": 20,
+    "month_count": 50,
+    "latest_knowledge": [...],
+    "catalog_distribution": [...],
+    "top_keywords": [...]
 }
 ```
 
-### 5.1.9 search_knowledge(query: str) -> List[Dict[str, Any]]
+### 5.1.11 search_knowledge(query: str) -> List[Dict[str, Any]]
 
 搜索知识。
 
@@ -167,7 +221,9 @@ print(result["answer"])
         "id": "item-001",
         "question": "...",
         "answer": "...",
-        "similarity": 0.9
+        "keywords": [...],
+        "similarity": 0.9,
+        "created_at": "2024-01-01T00:00:00"
     }
 ]
 ```
@@ -260,9 +316,142 @@ print(result["answer"])
 
 查找相似问题。
 
-## 5.4 数据模型
+## 5.4 REST API 接口
 
-### 5.4.1 KnowledgeCatalog
+### 5.4.1 对话接口
+
+**POST /api/chat**
+
+发送消息并获取回复（非流式）。
+
+请求体：
+```json
+{
+    "message": "什么是机器学习？"
+}
+```
+
+响应：
+```json
+{
+    "answer": "机器学习是...",
+    "source": "generated",
+    "knowledge_id": "uuid",
+    "catalog_id": "uuid",
+    "is_new": true
+}
+```
+
+**POST /api/chat/stream**
+
+流式对话（SSE）。
+
+请求体：
+```json
+{
+    "message": "什么是机器学习？"
+}
+```
+
+响应（SSE 格式）：
+```
+data: {"type": "metadata", "data": {"catalog_id": "uuid", "match_reason": "..."}}
+
+data: {"type": "chunk", "data": "机器"}
+
+data: {"type": "chunk", "data": "学习"}
+
+data: {"type": "done"}
+```
+
+**GET /api/chat/history**
+
+获取对话历史。
+
+响应：
+```json
+[
+    {
+        "id": "uuid",
+        "question": "...",
+        "answer": "...",
+        "created_at": "2024-01-01T00:00:00"
+    }
+]
+```
+
+### 5.4.2 知识管理接口
+
+**GET /api/knowledge**
+
+获取所有知识。
+
+**GET /api/knowledge/statistics**
+
+获取统计数据（扩展版）。
+
+响应：
+```json
+{
+    "total_knowledge": 100,
+    "catalogs_count": 10,
+    "today_count": 5,
+    "week_count": 20,
+    "month_count": 50,
+    "latest_knowledge": [
+        {"id": "...", "question": "...", "created_at": "..."}
+    ],
+    "catalog_distribution": [
+        {"catalog_id": "...", "catalog_name": "编程", "count": 30}
+    ],
+    "top_keywords": [
+        {"keyword": "Python", "count": 20}
+    ]
+}
+```
+
+**GET /api/knowledge/search?query=xxx**
+
+搜索知识。
+
+**GET /api/knowledge/catalog/{catalog_id}**
+
+获取目录下的知识。
+
+**DELETE /api/knowledge/{id}**
+
+删除知识。
+
+### 5.4.3 目录管理接口
+
+**GET /api/catalog/tree**
+
+获取目录树。
+
+**GET /api/catalog**
+
+获取所有目录。
+
+**POST /api/catalog**
+
+创建目录。
+
+请求体：
+```json
+{
+    "name": "新目录",
+    "keywords": ["关键词1", "关键词2"],
+    "parent_id": null
+}
+```
+
+**DELETE /api/catalog/{id}**
+
+删除目录。
+
+## 5.5 数据模型
+
+### 5.5.1 KnowledgeCatalog
 
 ```python
 class KnowledgeCatalog:
@@ -276,7 +465,7 @@ class KnowledgeCatalog:
     updated_at: str
 ```
 
-### 5.4.2 KnowledgeItem
+### 5.5.2 KnowledgeItem
 
 ```python
 class KnowledgeItem:
@@ -291,9 +480,9 @@ class KnowledgeItem:
     updated_at: str
 ```
 
-## 5.5 配置
+## 5.6 配置
 
-### 5.5.1 Config
+### 5.6.1 Config
 
 ```python
 from knowledge_agent.config import config
@@ -301,4 +490,6 @@ from knowledge_agent.config import config
 config.openai_api_key  # API 密钥
 config.openai_model    # 模型名称
 config.provider         # 供应商
+config.embedding_provider  # 嵌入模型供应商
+config.embedding_model     # 嵌入模型名称
 ```
