@@ -55,7 +55,7 @@
         <div class="detail-body">
           <div class="detail-section">
             <strong>回答：</strong>
-            <p>{{ selectedKnowledge.answer }}</p>
+            <div class="markdown-content" v-html="formatMarkdown(selectedKnowledge.answer)"></div>
           </div>
           <div v-if="selectedKnowledge.keywords && selectedKnowledge.keywords.length" class="detail-section">
             <strong>关键词：</strong>
@@ -79,6 +79,7 @@
 
 <script setup>
 import { ref } from 'vue'
+import { marked } from 'marked'
 import { knowledgeApi } from '../api'
 
 const query = ref('')
@@ -107,6 +108,11 @@ const truncate = (text, length) => {
   if (!text) return ''
   if (text.length <= length) return text
   return text.substring(0, length) + '...'
+}
+
+const formatMarkdown = (text) => {
+  if (!text) return ''
+  return marked(text)
 }
 
 const formatDate = (dateStr) => {
@@ -196,7 +202,7 @@ const formatDate = (dateStr) => {
 .detail-content {
   background: var(--card-bg);
   border-radius: 12px;
-  max-width: 600px;
+  max-width: 700px;
   width: 90%;
   max-height: 80vh;
   overflow-y: auto;
@@ -245,10 +251,92 @@ const formatDate = (dateStr) => {
   color: var(--text-secondary);
 }
 
-.detail-section p {
-  margin: 0;
-  line-height: 1.6;
-  white-space: pre-wrap;
+.markdown-content {
+  line-height: 1.8;
+  color: var(--text-color);
+}
+
+.markdown-content :deep(h1),
+.markdown-content :deep(h2),
+.markdown-content :deep(h3) {
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+  color: var(--text-color);
+}
+
+.markdown-content :deep(p) {
+  margin-bottom: 1em;
+}
+
+.markdown-content :deep(ul),
+.markdown-content :deep(ol) {
+  padding-left: 2em;
+  margin-bottom: 1em;
+}
+
+.markdown-content :deep(li) {
+  margin-bottom: 0.5em;
+}
+
+.markdown-content :deep(code) {
+  background-color: #f5f5f5;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 0.9em;
+}
+
+.markdown-content :deep(pre) {
+  background-color: #f8f8f8;
+  padding: 16px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin-bottom: 1em;
+  border: 1px solid var(--border-color);
+}
+
+.markdown-content :deep(pre code) {
+  background: none;
+  padding: 0;
+}
+
+.markdown-content :deep(blockquote) {
+  border-left: 4px solid var(--primary-color);
+  padding-left: 16px;
+  margin: 1em 0;
+  color: var(--text-secondary);
+}
+
+.markdown-content :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1em;
+}
+
+.markdown-content :deep(th),
+.markdown-content :deep(td) {
+  border: 1px solid var(--border-color);
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.markdown-content :deep(th) {
+  background-color: var(--bg-color);
+  font-weight: 600;
+}
+
+.markdown-content :deep(hr) {
+  border: none;
+  border-top: 1px solid var(--border-color);
+  margin: 1.5em 0;
+}
+
+.markdown-content :deep(strong) {
+  font-weight: 600;
+}
+
+.markdown-content :deep(em) {
+  font-style: italic;
 }
 
 .keyword-tag {
