@@ -117,15 +117,28 @@ rhizome/
 │   │   ├── components/   # 通用组件
 │   │   │   └── TreeNode.vue    # 目录树节点
 │   │   ├── api.js        # API 封装
-│   │   └── App.vue       # 根组件
+│   │   ├── App.vue       # 根组件
+│   │   └── style.css     # 全局样式
 │   └── package.json
 ├── knowledge_agent/       # 核心业务逻辑
 │   ├── agent/            # Agent 模块
 │   │   ├── qa_agent.py   # QA Agent（支持流式）
 │   │   └── prompt_templates.py
 │   ├── knowledge/        # 知识管理
-│   └── storage/          # 存储层
-└── data/                 # 数据目录（自动创建）
+│   │   ├── catalog_manager.py
+│   │   ├── knowledge_store.py
+│   │   └── models.py
+│   ├── storage/          # 存储层
+│   │   ├── json_storage.py
+│   │   └── vector_store.py
+│   └── config.py         # 配置管理
+├── data/                 # 数据目录（自动创建）
+│   ├── catalog.json      # 知识目录
+│   ├── knowledge.json    # 知识条目
+│   └── vector_store/     # 向量存储
+├── doc/                  # 技术文档
+├── tests/                # 测试文件
+└── scripts/              # 工具脚本
 ```
 
 ## 支持的 LLM 供应商

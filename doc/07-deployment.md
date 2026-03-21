@@ -11,24 +11,28 @@
 
 ## 7.2 本地部署
 
-### 7.2.1 方式一：使用 uv（推荐）
+### 7.2.1 方式一：使用启动脚本（Windows）
 
 ```powershell
-# 1. 克隆项目
-cd path/to/project
-
-# 2. 安装依赖
-uv sync
-
-# 3. 配置环境变量
-cp .env.example .env
-# 编辑 .env 填入 API Key
-
-# 4. 运行
-uv run python -m knowledge_agent.ui.gradio_app
+# 运行启动脚本（同时启动前后端）
+.\start.bat
 ```
 
-### 7.2.2 方式二：使用 Docker
+### 7.2.2 方式二：手动启动
+
+**启动后端：**
+```powershell
+uv run uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+**启动前端：**
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+### 7.2.3 方式三：使用 Docker
 
 ```dockerfile
 FROM python:3.11-slim
@@ -44,11 +48,33 @@ COPY . .
 # 安装依赖
 RUN uv sync
 
+# 安装 Node.js（用于前端）
+RUN apt-get update && apt-get install -y nodejs npm
+
+# 安装前端依赖
+WORKDIR /app/frontend
+RUN npm install
+
+WORKDIR /app
+
 # 配置
 ENV PYTHONUNBUFFERED=1
 
-# 启动
-CMD ["uv", "run", "python", "-m", "knowledge_agent.ui.gradio_app"]
+# 启动脚本
+COPY start.sh /start.sh
+RUN chmod +x /start.sh
+
+CMD ["/start.sh"]
+```
+
+**start.sh:**
+```bash
+#!/bin/bash
+# 启动后端
+uv run uvicorn backend.main:app --host 0.0.0.0 --port 8000 &
+# 启动前端
+cd frontend && npm run dev -- --host 0.0.0.0 --port 3000 &
+wait
 ```
 
 ```bash
@@ -56,7 +82,7 @@ CMD ["uv", "run", "python", "-m", "knowledge_agent.ui.gradio_app"]
 docker build -t rhizome .
 
 # 运行容器
-docker run -p 7860:7860 \
+docker run -p 3000:3000 -p 8000:8000 \
   -e OPENAI_API_KEY=your-key \
   rhizome
 ```
@@ -65,11 +91,11 @@ docker run -p 7860:7860 \
 
 ### 7.3.1 使用 systemd 服务
 
-创建服务文件 `/etc/systemd/system/rhizome.service`：
+创建后端服务文件 `/etc/systemd/system/rhizome-backend.service`：
 
 ```ini
 [Unit]
-Description=Rhizome Knowledge Agent
+Description=Rhizome Backend API
 After=network.target
 
 [Service]
@@ -77,7 +103,25 @@ Type=simple
 User=www-data
 WorkingDirectory=/path/to/rhizome
 Environment="PYTHONUNBUFFERED=1"
-ExecStart=/path/to/rhizome/.venv/bin/python -m knowledge_agent.ui.gradio_app
+ExecStart=/path/to/rhizome/.venv/bin/uvicorn backend.main:app --host 0.0.0.0 --port 8000
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+创建前端服务文件 `/etc/systemd/system/rhizome-frontend.service`：
+
+```ini
+[Unit]
+Description=Rhizome Frontend
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/path/to/rhizome/frontend
+ExecStart=/usr/bin/npm run dev -- --host 0.0.0.0 --port 3000
 Restart=always
 
 [Install]
@@ -88,11 +132,11 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable rhizome
-sudo systemctl start rhizome
+sudo systemctl enable rhizome-backend rhizome-frontend
+sudo systemctl start rhizome-backend rhizome-frontend
 ```
 
-### 7.3.2 使用 Gunicorn + Uvicorn
+### 7.3.2 使用 Gunicorn + Uvicorn（后端）
 
 ```bash
 # 安装额外依赖
@@ -100,17 +144,61 @@ uv add gunicorn
 
 # 运行
 gunicorn -w 4 -k uvicorn.workers.UvicornWorker \
-  knowledge_agent.ui.gradio_app:app
+  backend.main:app --bind 0.0.0.0:8000
 ```
+
+### 7.3.3 使用 Nginx 反向代理
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+
+    # 前端
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    # 后端 API
+    location /api/ {
+        proxy_pass http://localhost:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    # SSE 流式接口
+    location /api/chat/stream {
+        proxy_pass http://localhost:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Connection '';
+        proxy_buffering off;
+        proxy_cache off;
+        chunked_transfer_encoding off;
+    }
+}
 
 ## 7.4 云平台部署
 
 ### 7.4.1 Azure App Service
 
-1. 创建 Web App
-2. 配置启动命令：`uv run python -m knowledge_agent.ui.gradio_app`
+**后端部署：**
+1. 创建 Web App (Python)
+2. 配置启动命令：`uvicorn backend.main:app --host 0.0.0.0 --port 8000`
 3. 设置应用设置（环境变量）
 4. 部署代码
+
+**前端部署：**
+1. 创建 Static Web App
+2. 配置构建命令：`npm run build`
+3. 配置输出目录：`dist`
+4. 配置 API 代理到后端
 
 ### 7.4.2 Railway
 
@@ -118,18 +206,24 @@ gunicorn -w 4 -k uvicorn.workers.UvicornWorker \
 # railway.toml
 [build]
 builder = "nixpacks"
-nixpacksPlan = "{ phases = [ \"install\", "build" ], }"
 
 [deploy]
-startCommand = "uv run python -m knowledge_agent.ui.gradio_app"
+startCommand = "uv run uvicorn backend.main:app --host 0.0.0.0 --port $PORT"
 ```
 
 ### 7.4.3 Render
 
-1. 连接 GitHub 仓库
+**后端服务：**
+1. 创建 Web Service
 2. 设置构建命令：`uv sync`
-3. 设置启动命令：`uv run python -m knowledge_agent.ui.gradio_app`
+3. 设置启动命令：`uv run uvicorn backend.main:app --host 0.0.0.0 --port $PORT`
 4. 添加环境变量
+
+**前端服务：**
+1. 创建 Static Site
+2. 设置构建命令：`npm run build`
+3. 设置输出目录：`dist`
+4. 配置 API 代理
 
 ## 7.5 代理配置
 

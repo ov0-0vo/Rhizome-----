@@ -418,6 +418,38 @@ data: {"type": "done"}
 
 获取目录下的知识。
 
+**GET /api/knowledge/{id}**
+
+获取单个知识详情。
+
+**POST /api/knowledge**
+
+创建知识。
+
+请求体：
+```json
+{
+    "question": "问题内容",
+    "answer": "答案内容",
+    "keywords": ["关键词1", "关键词2"],
+    "catalog_id": "目录ID"
+}
+```
+
+**PUT /api/knowledge/{id}**
+
+更新知识。
+
+请求体：
+```json
+{
+    "question": "更新后的问题",
+    "answer": "更新后的答案",
+    "keywords": ["关键词1", "关键词2"],
+    "catalog_id": "目录ID"
+}
+```
+
 **DELETE /api/knowledge/{id}**
 
 删除知识。
@@ -442,6 +474,18 @@ data: {"type": "done"}
     "name": "新目录",
     "keywords": ["关键词1", "关键词2"],
     "parent_id": null
+}
+```
+
+**PUT /api/catalog/{id}**
+
+更新目录。
+
+请求体：
+```json
+{
+    "name": "更新后的目录名",
+    "keywords": ["关键词1", "关键词2"]
 }
 ```
 

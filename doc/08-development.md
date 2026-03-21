@@ -4,30 +4,57 @@
 
 ```
 rhizome/
-├── knowledge_agent/          # 主包
+├── backend/                  # FastAPI 后端
 │   ├── __init__.py
-│   ├── config.py            # 配置
-│   ├── agent/               # Agent 模块
+│   ├── main.py              # 应用入口
+│   ├── dependencies.py      # 依赖注入
+│   └── routes/              # API 路由
+│       ├── __init__.py
+│       ├── chat.py          # 对话接口
+│       ├── knowledge.py     # 知识管理接口
+│       └── catalog.py       # 目录管理接口
+├── frontend/                # Vue 3 前端
+│   ├── src/
+│   │   ├── views/          # 页面组件
+│   │   │   ├── ChatView.vue
+│   │   │   ├── CatalogView.vue
+│   │   │   ├── SearchView.vue
+│   │   │   └── StatsView.vue
+│   │   ├── components/     # 通用组件
+│   │   │   └── TreeNode.vue
+│   │   ├── api.js          # API 封装
+│   │   ├── App.vue         # 根组件
+│   │   ├── main.js         # 入口文件
+│   │   └── style.css       # 全局样式
+│   ├── index.html
+│   ├── package.json
+│   └── vite.config.js
+├── knowledge_agent/         # 主包
+│   ├── __init__.py
+│   ├── config.py           # 配置
+│   ├── agent/              # Agent 模块
 │   │   ├── __init__.py
 │   │   ├── qa_agent.py
 │   │   └── prompt_templates.py
-│   ├── knowledge/           # 知识管理模块
+│   ├── knowledge/          # 知识管理模块
 │   │   ├── __init__.py
 │   │   ├── models.py
 │   │   ├── catalog_manager.py
 │   │   └── knowledge_store.py
-│   ├── storage/             # 存储模块
-│   │   ├── __init__.py
-│   │   ├── json_storage.py
-│   │   └── vector_store.py
-│   └── ui/                  # UI 模块
+│   └── storage/            # 存储模块
 │       ├── __init__.py
-│       └── gradio_app.py
-├── data/                    # 数据目录
-├── doc/                     # 技术文档
-├── tests/                   # 测试
-├── pyproject.toml           # 项目配置
+│       ├── json_storage.py
+│       └── vector_store.py
+├── data/                   # 数据目录
+│   ├── catalog.json        # 知识目录
+│   ├── knowledge.json      # 知识条目
+│   └── vector_store/       # 向量存储
+├── doc/                    # 技术文档
+├── tests/                  # 测试
+├── scripts/                # 工具脚本
+├── pyproject.toml          # 项目配置
 ├── .env.example            # 环境变量示例
+├── start.bat               # Windows 启动脚本
 └── README.md
 ```
 
@@ -168,15 +195,40 @@ class CatalogManager:
 
 ### 8.5.3 添加新的 UI 界面
 
-参考 `gradio_app.py` 创建新的 UI：
+前端基于 Vue 3 + Vite，可以扩展新的页面组件：
 
-```python
-# knowledge_agent/ui/streamlit_app.py
-import streamlit as st
+```vue
+<!-- frontend/src/views/NewView.vue -->
+<template>
+  <div class="new-view">
+    <h1>新页面</h1>
+    <!-- 页面内容 -->
+  </div>
+</template>
 
-def create_streamlit_app():
-    st.title("Rhizome Knowledge Agent")
-    # 实现...
+<script setup>
+import { ref, onMounted } from 'vue'
+import { someApi } from '../api.js'
+
+const data = ref([])
+
+onMounted(async () => {
+  data.value = await someApi.getData()
+})
+</script>
+
+<style scoped>
+.new-view {
+  padding: 20px;
+}
+</style>
+```
+
+然后在 `App.vue` 中添加路由：
+
+```javascript
+// 在 App.vue 中添加导航
+<router-link to="/new">新页面</router-link>
 ```
 
 ## 8.6 调试技巧

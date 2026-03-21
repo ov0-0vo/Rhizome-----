@@ -308,11 +308,21 @@ results = vector_store.search(
 基于 FastAPI 的 RESTful API 服务：
 
 ```python
-# backend/main.py
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+app = FastAPI(title="Rhizome API", version="1.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 from backend.routes import chat, knowledge, catalog
 
-app = FastAPI(title="Rhizome API")
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(knowledge.router, prefix="/api/knowledge", tags=["knowledge"])
 app.include_router(catalog.router, prefix="/api/catalog", tags=["catalog"])
@@ -323,7 +333,6 @@ app.include_router(catalog.router, prefix="/api/catalog", tags=["catalog"])
 使用 FastAPI 的依赖注入管理状态：
 
 ```python
-# backend/dependencies.py
 from knowledge_agent.agent.qa_agent import QAAgent
 from knowledge_agent.knowledge.catalog_manager import CatalogManager
 from knowledge_agent.knowledge.knowledge_store import KnowledgeStore
@@ -351,8 +360,8 @@ def get_state():
 使用 Server-Sent Events 实现流式响应：
 
 ```python
-# backend/routes/chat.py
 from fastapi.responses import StreamingResponse
+import json
 
 @router.post("/stream")
 async def chat_stream(request: ChatRequest):
@@ -360,16 +369,48 @@ async def chat_stream(request: ChatRequest):
     stream_iter, metadata = current_state.qa_agent.chat_with_stream(request.message)
     
     async def event_generator():
-        yield f"data: {json.dumps({'type': 'metadata', 'data': metadata})}\n\n"
         for chunk in stream_iter:
-            yield f"data: {json.dumps({'type': 'chunk', 'data': chunk})}\n\n"
-        yield f"data: {json.dumps({'type': 'done'})}\n\n"
+            data = {"type": "chunk", "content": chunk}
+            yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+        
+        final_data = {
+            "type": "done",
+            "metadata": {
+                "catalog_id": metadata.get("catalog_id"),
+                "is_new": metadata.get("is_new", True)
+            }
+        }
+        yield f"data: {json.dumps(final_data, ensure_ascii=False)}\n\n"
     
     return StreamingResponse(
         event_generator(),
-        media_type="text/event-stream"
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"}
     )
 ```
+
+### 3.5.4 API 路由模块
+
+**chat.py** - 对话接口：
+- `POST /api/chat` - 普通对话
+- `POST /api/chat/stream` - 流式对话（SSE）
+- `GET /api/chat/history` - 获取对话历史
+
+**knowledge.py** - 知识管理接口：
+- `GET /api/knowledge` - 获取所有知识
+- `GET /api/knowledge/statistics` - 获取统计数据
+- `GET /api/knowledge/search` - 搜索知识
+- `GET /api/knowledge/{id}` - 获取单个知识
+- `POST /api/knowledge` - 创建知识
+- `PUT /api/knowledge/{id}` - 更新知识
+- `DELETE /api/knowledge/{id}` - 删除知识
+
+**catalog.py** - 目录管理接口：
+- `GET /api/catalog/tree` - 获取目录树
+- `GET /api/catalog` - 获取所有目录
+- `POST /api/catalog` - 创建目录
+- `PUT /api/catalog/{id}` - 更新目录
+- `DELETE /api/catalog/{id}` - 删除目录
 
 ## 3.6 前端模块 (frontend/)
 
