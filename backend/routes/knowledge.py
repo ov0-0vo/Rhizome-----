@@ -1,7 +1,8 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
+from ..dependencies import get_state
 
 router = APIRouter()
 
@@ -13,6 +14,20 @@ class KnowledgeItem(BaseModel):
     keywords: List[str]
     catalog_id: Optional[str] = None
     created_at: str
+
+
+class KnowledgeCreateRequest(BaseModel):
+    question: str
+    answer: str
+    keywords: List[str] = []
+    catalog_id: Optional[str] = None
+
+
+class KnowledgeUpdateRequest(BaseModel):
+    question: Optional[str] = None
+    answer: Optional[str] = None
+    keywords: Optional[List[str]] = None
+    catalog_id: Optional[str] = None
 
 
 class KnowledgeSearchResult(BaseModel):
@@ -50,7 +65,6 @@ class Statistics(BaseModel):
 
 @router.get("", response_model=List[KnowledgeItem])
 async def get_all_knowledge():
-    from ..dependencies import get_state
     current_state = get_state()
     items = current_state.qa_agent.get_all_knowledge()
     return [
@@ -68,7 +82,6 @@ async def get_all_knowledge():
 
 @router.get("/statistics", response_model=Statistics)
 async def get_statistics():
-    from ..dependencies import get_state
     current_state = get_state()
     
     all_items = current_state.qa_agent.get_all_knowledge()
@@ -139,7 +152,6 @@ async def get_statistics():
 
 @router.get("/search", response_model=List[KnowledgeSearchResult])
 async def search_knowledge(query: str, limit: int = 5):
-    from ..dependencies import get_state
     current_state = get_state()
     results = current_state.qa_agent.search_knowledge(query)
     return [
@@ -158,7 +170,6 @@ async def search_knowledge(query: str, limit: int = 5):
 
 @router.get("/catalog/{catalog_id}", response_model=List[KnowledgeItem])
 async def get_knowledge_by_catalog(catalog_id: str):
-    from ..dependencies import get_state
     current_state = get_state()
     items = current_state.knowledge_store.get_knowledge_by_catalog(catalog_id)
     return [
@@ -176,7 +187,62 @@ async def get_knowledge_by_catalog(catalog_id: str):
 
 @router.delete("/{knowledge_id}")
 async def delete_knowledge(knowledge_id: str):
-    from ..dependencies import get_state
     current_state = get_state()
     current_state.qa_agent.delete_knowledge(knowledge_id)
     return {"message": "Knowledge deleted successfully"}
+
+
+@router.post("", response_model=KnowledgeItem)
+async def create_knowledge(request: KnowledgeCreateRequest):
+    current_state = get_state()
+    item = current_state.knowledge_store.add_knowledge(
+        question=request.question,
+        answer=request.answer,
+        catalog_id=request.catalog_id,
+        keywords=request.keywords
+    )
+    return KnowledgeItem(
+        id=item.id,
+        question=item.question,
+        answer=item.answer,
+        keywords=item.keywords,
+        catalog_id=item.catalog_id,
+        created_at=item.created_at
+    )
+
+
+@router.get("/{knowledge_id}", response_model=KnowledgeItem)
+async def get_knowledge(knowledge_id: str):
+    current_state = get_state()
+    item = current_state.knowledge_store.get_knowledge(knowledge_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Knowledge not found")
+    return KnowledgeItem(
+        id=item.id,
+        question=item.question,
+        answer=item.answer,
+        keywords=item.keywords,
+        catalog_id=item.catalog_id,
+        created_at=item.created_at
+    )
+
+
+@router.put("/{knowledge_id}", response_model=KnowledgeItem)
+async def update_knowledge(knowledge_id: str, request: KnowledgeUpdateRequest):
+    current_state = get_state()
+    item = current_state.knowledge_store.update_knowledge(
+        knowledge_id=knowledge_id,
+        answer=request.answer,
+        keywords=request.keywords,
+        catalog_id=request.catalog_id
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="Knowledge not found")
+    return KnowledgeItem(
+        id=item.id,
+        question=item.question,
+        answer=item.answer,
+        keywords=item.keywords,
+        catalog_id=item.catalog_id,
+        created_at=item.created_at
+    )

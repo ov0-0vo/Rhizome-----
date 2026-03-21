@@ -112,6 +112,18 @@ export const knowledgeApi = {
     return api.get(`/knowledge/catalog/${catalogId}`)
   },
 
+  get(id) {
+    return api.get(`/knowledge/${id}`)
+  },
+
+  create(data) {
+    return api.post('/knowledge', data)
+  },
+
+  update(id, data) {
+    return api.put(`/knowledge/${id}`, data)
+  },
+
   delete(id) {
     return api.delete(`/knowledge/${id}`)
   }

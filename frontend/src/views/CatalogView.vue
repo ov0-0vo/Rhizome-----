@@ -47,6 +47,7 @@
             @create-sub-catalog="handleCreateSubCatalog"
             @edit-catalog="handleEditCatalog"
             @delete-catalog="handleDeleteCatalog"
+            @add-knowledge="handleAddKnowledge"
             @refresh="loadTree"
           />
         </template>
@@ -57,6 +58,7 @@
             @create-sub-catalog="handleCreateSubCatalog"
             @edit-catalog="handleEditCatalog"
             @delete-catalog="handleDeleteCatalog"
+            @add-knowledge="handleAddKnowledge"
             @refresh="loadTree"
           />
         </template>
@@ -182,6 +184,10 @@ const handleDeleteCatalog = async ({ catalogId, catalogName }) => {
     console.error('Failed to delete catalog:', error)
     alert('删除失败')
   }
+}
+
+const handleAddKnowledge = ({ catalogId }) => {
+  console.log('Add knowledge to catalog:', catalogId)
 }
 
 const closeModal = () => {
