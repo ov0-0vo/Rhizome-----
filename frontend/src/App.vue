@@ -1,72 +1,71 @@
 <template>
   <div class="app" :data-theme="theme">
-    <header class="header">
-      <div class="header-content">
-        <div class="header-left">
-          <h1 class="logo">
-            <span class="logo-icon">🌳</span>
-            <span class="logo-text">Rhizome</span>
-            <span class="logo-subtitle">灵犀树</span>
-          </h1>
-        </div>
-        <div class="header-right">
-          <button class="btn-icon theme-toggle" @click="toggleTheme" :title="theme === 'dark' ? '切换到浅色模式' : '切换到深色模式'">
-            <span v-if="theme === 'dark'">☀️</span>
-            <span v-else>🌙</span>
-          </button>
-        </div>
+    <button class="mobile-menu-btn" @click="sidebarOpen = true">
+      <span class="menu-icon">☰</span>
+    </button>
+
+    <div class="sidebar-overlay" v-if="sidebarOpen" @click="sidebarOpen = false"></div>
+
+    <aside class="sidebar" :class="{ open: sidebarOpen }">
+      <div class="sidebar-header">
+        <h1 class="logo">
+          <span class="logo-icon">🌳</span>
+          <span class="logo-text">Rhizome</span>
+        </h1>
+        <button class="close-btn" @click="sidebarOpen = false">×</button>
       </div>
-    </header>
+
+      <nav class="nav-menu">
+        <div 
+          class="nav-item" 
+          :class="{ active: activeTab === 'chat' }"
+          @click="selectTab('chat')"
+        >
+          <span class="nav-icon">💬</span>
+          <span class="nav-text">对话</span>
+        </div>
+        <div 
+          class="nav-item" 
+          :class="{ active: activeTab === 'catalog' }"
+          @click="selectTab('catalog')"
+        >
+          <span class="nav-icon">📚</span>
+          <span class="nav-text">知识目录</span>
+        </div>
+        <div 
+          class="nav-item" 
+          :class="{ active: activeTab === 'search' }"
+          @click="selectTab('search')"
+        >
+          <span class="nav-icon">🔍</span>
+          <span class="nav-text">搜索</span>
+        </div>
+        <div 
+          class="nav-item" 
+          :class="{ active: activeTab === 'stats' }"
+          @click="selectTab('stats')"
+        >
+          <span class="nav-icon">📊</span>
+          <span class="nav-text">统计</span>
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button class="theme-toggle" @click="toggleTheme">
+          <span class="theme-icon">{{ theme === 'dark' ? '☀️' : '🌙' }}</span>
+          <span class="theme-text">{{ theme === 'dark' ? '浅色模式' : '深色模式' }}</span>
+        </button>
+      </div>
+    </aside>
 
     <main class="main-content">
-      <div class="container">
-        <nav class="tabs">
-          <div 
-            class="tab" 
-            :class="{ active: activeTab === 'chat' }"
-            @click="activeTab = 'chat'"
-          >
-            <span class="tab-icon">💬</span>
-            <span class="tab-text">对话</span>
-          </div>
-          <div 
-            class="tab" 
-            :class="{ active: activeTab === 'catalog' }"
-            @click="activeTab = 'catalog'"
-          >
-            <span class="tab-icon">📚</span>
-            <span class="tab-text">知识目录</span>
-          </div>
-          <div 
-            class="tab" 
-            :class="{ active: activeTab === 'search' }"
-            @click="activeTab = 'search'"
-          >
-            <span class="tab-icon">🔍</span>
-            <span class="tab-text">搜索</span>
-          </div>
-          <div 
-            class="tab" 
-            :class="{ active: activeTab === 'stats' }"
-            @click="activeTab = 'stats'"
-          >
-            <span class="tab-icon">📊</span>
-            <span class="tab-text">统计</span>
-          </div>
-        </nav>
-
-        <transition name="fade" mode="out-in">
-          <ChatView v-if="activeTab === 'chat'" key="chat" />
-          <CatalogView v-else-if="activeTab === 'catalog'" key="catalog" />
-          <SearchView v-else-if="activeTab === 'search'" key="search" />
-          <StatsView v-else-if="activeTab === 'stats'" key="stats" />
-        </transition>
-      </div>
+      <transition name="fade" mode="out-in">
+        <ChatView v-if="activeTab === 'chat'" key="chat" />
+        <CatalogView v-else-if="activeTab === 'catalog'" key="catalog" />
+        <SearchView v-else-if="activeTab === 'search'" key="search" />
+        <StatsView v-else-if="activeTab === 'stats'" key="stats" />
+      </transition>
     </main>
-
-    <footer class="footer">
-      <p>通过对话建立和管理您的个人知识体系</p>
-    </footer>
   </div>
 </template>
 
@@ -79,6 +78,12 @@ import StatsView from './views/StatsView.vue'
 
 const activeTab = ref('chat')
 const theme = ref('light')
+const sidebarOpen = ref(false)
+
+const selectTab = (tab) => {
+  activeTab.value = tab
+  sidebarOpen.value = false
+}
 
 const toggleTheme = () => {
   theme.value = theme.value === 'dark' ? 'light' : 'dark'
@@ -97,39 +102,68 @@ onMounted(() => {
 
 <style scoped>
 .app {
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
-  flex-direction: column;
   background: var(--bg-primary);
   transition: background-color var(--transition-normal);
+  overflow: hidden;
 }
 
-.header {
+.mobile-menu-btn {
+  display: none;
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 200;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.mobile-menu-btn:hover {
+  background: var(--bg-secondary);
+}
+
+.menu-icon {
+  font-size: 20px;
+  color: var(--text-primary);
+}
+
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 250;
+  backdrop-filter: blur(2px);
+}
+
+.sidebar {
+  width: 240px;
+  min-width: 240px;
+  height: 100vh;
   position: sticky;
   top: 0;
-  z-index: 100;
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border-light);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-light);
   transition: all var(--transition-normal);
 }
 
-[data-theme="dark"] .header {
-  background: rgba(26, 29, 33, 0.85);
-}
-
-.header-content {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 16px 24px;
+.sidebar-header {
+  padding: 20px 16px;
+  border-bottom: 1px solid var(--border-light);
   display: flex;
   justify-content: space-between;
-  align-items: center;
-}
-
-.header-left {
-  display: flex;
   align-items: center;
 }
 
@@ -137,13 +171,13 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .logo-icon {
-  font-size: 28px;
+  font-size: 26px;
   animation: float 3s ease-in-out infinite;
 }
 
@@ -163,43 +197,36 @@ onMounted(() => {
   background-clip: text;
 }
 
-.logo-subtitle {
-  font-size: 14px;
-  font-weight: 400;
+.close-btn {
+  display: none;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
   color: var(--text-secondary);
-  margin-left: 4px;
+  font-size: 24px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
 }
 
-.header-right {
+.close-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.nav-menu {
+  flex: 1;
+  padding: 16px 12px;
+  overflow-y: auto;
+}
+
+.nav-item {
   display: flex;
   align-items: center;
   gap: 12px;
-}
-
-.theme-toggle {
-  font-size: 18px;
-}
-
-.main-content {
-  flex: 1;
-  padding-bottom: 40px;
-}
-
-.tabs {
-  display: flex;
-  gap: 4px;
-  background: var(--bg-secondary);
-  padding: 6px;
-  border-radius: var(--radius-xl);
-  margin-bottom: 24px;
-  box-shadow: var(--shadow-sm);
-}
-
-.tab {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 24px;
+  padding: 12px 16px;
+  margin-bottom: 4px;
   cursor: pointer;
   border-radius: var(--radius-lg);
   font-weight: 500;
@@ -210,27 +237,76 @@ onMounted(() => {
   user-select: none;
 }
 
-.tab:hover {
+.nav-item:hover {
   color: var(--text-primary);
   background: var(--bg-hover);
 }
 
-.tab.active {
+.nav-item.active {
   color: var(--primary-color);
-  background: var(--bg-card);
-  box-shadow: var(--shadow-sm);
+  background: var(--primary-light);
 }
 
-.tab-icon {
-  font-size: 16px;
+.nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 24px;
+  background: var(--primary-color);
+  border-radius: 0 2px 2px 0;
 }
 
-.footer {
+.nav-icon {
+  font-size: 18px;
+  width: 24px;
   text-align: center;
-  padding: 20px;
-  color: var(--text-muted);
-  font-size: 13px;
+}
+
+.nav-text {
+  flex: 1;
+}
+
+.sidebar-footer {
+  padding: 16px;
   border-top: 1px solid var(--border-light);
+}
+
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.theme-toggle:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.theme-icon {
+  font-size: 18px;
+}
+
+.main-content {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 24px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .fade-enter-active,
@@ -249,24 +325,41 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
-  .header-content {
-    padding: 12px 16px;
+  .mobile-menu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
-  
-  .logo-subtitle {
-    display: none;
+
+  .sidebar-overlay {
+    display: block;
   }
-  
-  .tab-text {
-    display: none;
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    z-index: 300;
+    transform: translateX(-100%);
+    box-shadow: var(--shadow-lg);
   }
-  
-  .tab {
-    padding: 12px 16px;
+
+  .sidebar.open {
+    transform: translateX(0);
   }
-  
-  .tab-icon {
-    font-size: 20px;
+
+  .close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .main-content {
+    height: 100vh;
+    padding: 0;
+    padding-top: 60px;
+    box-sizing: border-box;
   }
 }
 </style>

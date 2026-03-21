@@ -130,6 +130,10 @@ export const catalogApi = {
     return api.post('/catalog', data)
   },
 
+  update(id, data) {
+    return api.put(`/catalog/${id}`, data)
+  },
+
   delete(id) {
     return api.delete(`/catalog/${id}`)
   }

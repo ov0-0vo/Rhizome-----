@@ -6,6 +6,17 @@
       <span class="knowledge-count" v-if="node.knowledge_count > 0">
         {{ node.knowledge_count }}
       </span>
+      <div class="node-actions" @click.stop>
+        <button class="action-btn" title="新建子目录" @click="emitCreateSubCatalog">
+          <span>➕</span>
+        </button>
+        <button class="action-btn" title="编辑目录" @click="emitEditCatalog">
+          <span>✏️</span>
+        </button>
+        <button class="action-btn delete" title="删除目录" @click="emitDeleteCatalog">
+          <span>🗑️</span>
+        </button>
+      </div>
     </div>
     
     <transition name="slide">
@@ -14,6 +25,10 @@
           v-for="child in node.children" 
           :key="child.id" 
           :node="child"
+          @create-sub-catalog="$emit('create-sub-catalog', $event)"
+          @edit-catalog="$emit('edit-catalog', $event)"
+          @delete-catalog="$emit('delete-catalog', $event)"
+          @refresh="$emit('refresh')"
         />
       </div>
     </transition>
@@ -93,6 +108,8 @@ const props = defineProps({
   }
 })
 
+const emit = defineEmits(['create-sub-catalog', 'edit-catalog', 'delete-catalog', 'refresh'])
+
 const expanded = ref(false)
 const showKnowledge = ref(false)
 const knowledgeList = ref([])
@@ -152,6 +169,28 @@ const loadKnowledge = async () => {
   }
 }
 
+const emitCreateSubCatalog = () => {
+  emit('create-sub-catalog', {
+    parentId: props.node.id,
+    parentName: props.node.name
+  })
+}
+
+const emitEditCatalog = () => {
+  emit('edit-catalog', {
+    catalogId: props.node.id,
+    name: props.node.name,
+    keywords: props.node.keywords
+  })
+}
+
+const emitDeleteCatalog = () => {
+  emit('delete-catalog', {
+    catalogId: props.node.id,
+    catalogName: props.node.name
+  })
+}
+
 const formatDate = (dateStr) => {
   return new Date(dateStr).toLocaleString('zh-CN')
 }
@@ -184,6 +223,10 @@ const formatDate = (dateStr) => {
   background: var(--bg-secondary);
 }
 
+.node-content:hover .node-actions {
+  opacity: 1;
+}
+
 .expand-icon {
   margin-right: 10px;
   font-size: 18px;
@@ -194,16 +237,51 @@ const formatDate = (dateStr) => {
   font-weight: 500;
   font-size: 14px;
   color: var(--text-primary);
+  flex: 1;
 }
 
 .knowledge-count {
-  margin-left: auto;
+  margin-left: 12px;
   font-size: 12px;
   font-weight: 600;
   color: var(--text-secondary);
   background: var(--bg-secondary);
   padding: 2px 8px;
   border-radius: var(--radius-xl);
+}
+
+.node-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: 12px;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.action-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.action-btn span {
+  font-size: 12px;
+}
+
+.action-btn:hover {
+  background: var(--bg-hover);
+  transform: scale(1.1);
+}
+
+.action-btn.delete:hover {
+  background: #fee2e2;
 }
 
 .children {
@@ -271,6 +349,11 @@ const formatDate = (dateStr) => {
 .loading-dots .dot:nth-child(1) { animation-delay: -0.32s; }
 .loading-dots .dot:nth-child(2) { animation-delay: -0.16s; }
 
+@keyframes bounce {
+  0%, 80%, 100% { transform: scale(0); }
+  40% { transform: scale(1); }
+}
+
 .no-knowledge {
   margin-left: 28px;
   padding: 12px;
@@ -301,6 +384,17 @@ const formatDate = (dateStr) => {
   overflow-y: auto;
   box-shadow: var(--shadow-lg);
   animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .detail-header {
@@ -357,6 +451,44 @@ const formatDate = (dateStr) => {
   letter-spacing: 0.5px;
 }
 
+.markdown-content {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-primary);
+}
+
+.markdown-content :deep(h1),
+.markdown-content :deep(h2),
+.markdown-content :deep(h3) {
+  margin-top: 16px;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+}
+
+.markdown-content :deep(p) {
+  margin-bottom: 12px;
+}
+
+.markdown-content :deep(code) {
+  background: var(--bg-secondary);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-family: monospace;
+}
+
+.markdown-content :deep(pre) {
+  background: var(--bg-secondary);
+  padding: 12px;
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+}
+
+.markdown-content :deep(ul),
+.markdown-content :deep(ol) {
+  padding-left: 20px;
+  margin-bottom: 12px;
+}
+
 .keyword-list {
   display: flex;
   flex-wrap: wrap;
@@ -395,6 +527,10 @@ const formatDate = (dateStr) => {
   
   .knowledge-list {
     margin-left: 18px;
+  }
+  
+  .node-actions {
+    opacity: 1;
   }
 }
 </style>

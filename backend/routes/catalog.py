@@ -26,6 +26,11 @@ class CreateCatalogRequest(BaseModel):
     parent_id: Optional[str] = None
 
 
+class UpdateCatalogRequest(BaseModel):
+    name: str
+    keywords: List[str] = []
+
+
 CatalogNode.model_rebuild()
 
 
@@ -74,6 +79,26 @@ async def create_catalog(request: CreateCatalogRequest):
         keywords=request.keywords,
         parent_id=request.parent_id
     )
+    return CatalogInfo(
+        id=catalog.id,
+        name=catalog.name,
+        keywords=catalog.keywords,
+        parent_id=catalog.parent_id
+    )
+
+
+@router.put("/{catalog_id}", response_model=CatalogInfo)
+async def update_catalog(catalog_id: str, request: UpdateCatalogRequest):
+    from ..dependencies import get_state
+    current_state = get_state()
+    catalog = current_state.catalog_manager.update_catalog(
+        catalog_id=catalog_id,
+        name=request.name,
+        keywords=request.keywords
+    )
+    if not catalog:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Catalog not found")
     return CatalogInfo(
         id=catalog.id,
         name=catalog.name,

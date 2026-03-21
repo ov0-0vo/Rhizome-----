@@ -1,5 +1,5 @@
 <template>
-  <div class="chat-view card">
+  <div class="chat-view">
     <div class="chat-messages" ref="messagesContainer">
       <div v-if="messages.length === 0 && !loading" class="empty-state">
         <div class="empty-icon">💬</div>
@@ -197,19 +197,43 @@ onMounted(() => {
 .chat-view {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 220px);
-  min-height: 450px;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
   padding: 0;
   overflow: hidden;
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-light);
+  box-shadow: var(--shadow-md);
 }
 
 .chat-messages {
-  flex: 1;
+  flex: 1 1 0;
+  min-height: 0;
   overflow-y: auto;
   padding: 24px;
   display: flex;
   flex-direction: column;
   gap: 20px;
+  scroll-behavior: smooth;
+}
+
+.chat-messages::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
 }
 
 .empty-state {
@@ -354,9 +378,11 @@ onMounted(() => {
 }
 
 .chat-input-wrapper {
+  flex-shrink: 0;
   padding: 20px 24px;
   border-top: 1px solid var(--border-light);
   background: var(--bg-card);
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.05);
 }
 
 .chat-input {
@@ -393,27 +419,43 @@ onMounted(() => {
 
 @media (max-width: 768px) {
   .chat-view {
-    height: calc(100vh - 180px);
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
   }
   
   .chat-messages {
     padding: 16px;
+    padding-bottom: 8px;
   }
   
   .message-content {
     max-width: 85%;
+    min-width: 80px;
   }
   
   .chat-input-wrapper {
-    padding: 16px;
+    padding: 12px 16px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+  
+  .chat-textarea {
+    min-height: 44px;
+    padding: 12px 14px;
+    font-size: 16px;
+  }
+  
+  .send-btn {
+    height: 44px;
+    padding: 0 16px;
   }
   
   .send-text {
     display: none;
   }
   
-  .send-btn {
-    padding: 0 16px;
+  .input-hint {
+    display: none;
   }
 }
 </style>
