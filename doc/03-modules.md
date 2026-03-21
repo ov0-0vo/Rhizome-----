@@ -412,6 +412,35 @@ async def chat_stream(request: ChatRequest):
 - `PUT /api/catalog/{id}` - 更新目录
 - `DELETE /api/catalog/{id}` - 删除目录
 
+**graph.py** - 知识图谱接口：
+- `GET /api/graph` - 获取完整知识图谱
+- `GET /api/graph/keywords` - 获取关键词网络图谱
+- `GET /api/graph/catalog/{catalog_id}` - 获取指定目录的知识图谱
+
+图谱数据模型：
+```python
+class GraphNode(BaseModel):
+    id: str
+    label: str
+    type: str  # catalog, knowledge, keyword
+    size: int = 10
+    catalog_id: Optional[str] = None
+
+class GraphEdge(BaseModel):
+    source: str
+    target: str
+    type: str  # parent-child, contains, has-keyword
+    weight: float = 1.0
+
+class KnowledgeGraph(BaseModel):
+    nodes: List[GraphNode]
+    edges: List[GraphEdge]
+
+class KeywordNetwork(BaseModel):
+    nodes: List[Dict[str, Any]]
+    edges: List[Dict[str, Any]]
+```
+
 ## 3.6 前端模块 (frontend/)
 
 ### 3.6.1 Vue 3 应用
@@ -485,4 +514,45 @@ const formatMarkdown = (text) => {
 | `CatalogView.vue` | 知识目录树，点击查看详情 |
 | `SearchView.vue` | 知识搜索，相似度排序 |
 | `StatsView.vue` | 统计数据，可视化图表 |
+| `GraphView.vue` | 知识图谱可视化，Canvas 绑定交互 |
 | `TreeNode.vue` | 目录树节点组件，Markdown 渲染 |
+
+### 3.6.5 知识图谱可视化
+
+`GraphView.vue` 提供知识图谱的可视化展示：
+
+**功能特性**：
+- **多视图模式**：完整图谱 / 关键词网络
+- **Canvas 渲染**：高性能图形绘制
+- **交互操作**：
+  - 拖拽节点
+  - 缩放视图
+  - 点击查看节点详情
+- **力导向布局**：自动排列节点位置
+- **节点类型区分**：
+  - 目录节点（蓝色）
+  - 知识节点（绿色）
+  - 关键词节点（橙色）
+
+**核心实现**：
+```javascript
+// 视图模式切换
+const viewMode = ref('full')  // 'full' 或 'keywords'
+
+// 加载图谱数据
+const loadGraph = async () => {
+    const url = viewMode.value === 'full' 
+        ? '/api/graph' 
+        : '/api/graph/keywords?limit=50'
+    const response = await fetch(url)
+    graphData.value = await response.json()
+    initGraph()
+}
+
+// 力导向布局模拟
+const simulateForces = () => {
+    // 节点斥力
+    // 边的引力
+    // 向中心的引力
+}
+```

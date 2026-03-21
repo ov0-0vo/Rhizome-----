@@ -493,6 +493,96 @@ data: {"type": "done"}
 
 删除目录。
 
+### 5.4.4 图谱接口
+
+**GET /api/graph**
+
+获取完整知识图谱。
+
+响应：
+```json
+{
+    "nodes": [
+        {
+            "id": "catalog-uuid",
+            "label": "目录名称",
+            "type": "catalog",
+            "size": 20,
+            "catalog_id": null
+        },
+        {
+            "id": "knowledge-uuid",
+            "label": "问题内容...",
+            "type": "knowledge",
+            "size": 10,
+            "catalog_id": "catalog-uuid"
+        },
+        {
+            "id": "keyword-关键词",
+            "label": "关键词",
+            "type": "keyword",
+            "size": 12
+        }
+    ],
+    "edges": [
+        {
+            "source": "catalog-parent",
+            "target": "catalog-child",
+            "type": "parent-child",
+            "weight": 1.0
+        },
+        {
+            "source": "catalog-uuid",
+            "target": "knowledge-uuid",
+            "type": "contains",
+            "weight": 1.0
+        },
+        {
+            "source": "keyword-关键词",
+            "target": "knowledge-uuid",
+            "type": "has-keyword",
+            "weight": 0.5
+        }
+    ]
+}
+```
+
+**GET /api/graph/keywords?limit=50**
+
+获取关键词网络图谱。
+
+参数：
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| limit | int | 否 | 50 | 返回的关键词数量上限 |
+
+响应：
+```json
+{
+    "nodes": [
+        {
+            "id": "Python",
+            "label": "Python",
+            "size": 15,
+            "count": 5
+        }
+    ],
+    "edges": [
+        {
+            "source": "Python",
+            "target": "机器学习",
+            "weight": 3
+        }
+    ]
+}
+```
+
+**GET /api/graph/catalog/{catalog_id}**
+
+获取指定目录的知识图谱。
+
+响应格式与 `/api/graph` 相同。
+
 ## 5.5 数据模型
 
 ### 5.5.1 KnowledgeCatalog

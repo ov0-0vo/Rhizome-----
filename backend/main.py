@@ -26,11 +26,12 @@ app.add_middleware(
 )
 
 
-from .routes import chat, knowledge, catalog
+from .routes import chat, knowledge, catalog, graph
 
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(knowledge.router, prefix="/api/knowledge", tags=["knowledge"])
 app.include_router(catalog.router, prefix="/api/catalog", tags=["catalog"])
+app.include_router(graph.router, prefix="/api/graph", tags=["graph"])
 
 
 @app.get("/")

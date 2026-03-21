@@ -8,6 +8,7 @@
 - **流式输出** - 实时显示 AI 回答，提升用户体验
 - **知识目录管理** - 自动将知识分类到结构化目录
 - **智能检索优化** - 目录索引 + 向量检索，只查看相关知识
+- **知识图谱可视化** - 图形化展示知识关联，支持关键词网络
 - **Markdown 渲染** - 知识详情支持 Markdown 格式展示
 - **多模型支持** - OpenAI、Anthropic、Ollama、Azure OpenAI
 - **本地嵌入模型** - 支持 HuggingFace 本地模型，离线可用
@@ -106,14 +107,16 @@ rhizome/
 │   └── routes/            # API 路由
 │       ├── chat.py        # 对话接口（支持 SSE 流式）
 │       ├── knowledge.py   # 知识管理接口
-│       └── catalog.py     # 目录管理接口
+│       ├── catalog.py     # 目录管理接口
+│       └── graph.py       # 知识图谱接口
 ├── frontend/              # Vue 3 前端
 │   ├── src/
 │   │   ├── views/        # 页面组件
 │   │   │   ├── ChatView.vue    # 对话页面
 │   │   │   ├── CatalogView.vue # 知识目录页面
 │   │   │   ├── SearchView.vue  # 搜索页面
-│   │   │   └── StatsView.vue   # 统计页面
+│   │   │   ├── StatsView.vue   # 统计页面
+│   │   │   └── GraphView.vue   # 知识图谱页面
 │   │   ├── components/   # 通用组件
 │   │   │   └── TreeNode.vue    # 目录树节点
 │   │   ├── api.js        # API 封装
@@ -184,6 +187,11 @@ rhizome/
 - `POST /api/catalog` - 创建目录
 - `DELETE /api/catalog/{id}` - 删除目录
 
+### 知识图谱
+- `GET /api/graph` - 获取完整知识图谱
+- `GET /api/graph/keywords` - 获取关键词网络图谱
+- `GET /api/graph/catalog/{catalog_id}` - 获取指定目录的知识图谱
+
 ## 前端功能
 
 ### 对话页面
@@ -207,6 +215,13 @@ rhizome/
 - 最近添加的知识列表
 - 目录分布可视化
 - 热门关键词云
+
+### 知识图谱页面
+- 完整图谱 / 关键词网络视图切换
+- Canvas 高性能渲染
+- 节点拖拽和缩放交互
+- 点击节点查看详情
+- 力导向自动布局
 
 ## 许可证
 

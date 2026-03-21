@@ -34,6 +34,14 @@
         </div>
         <div 
           class="nav-item" 
+          :class="{ active: activeTab === 'graph' }"
+          @click="selectTab('graph')"
+        >
+          <span class="nav-icon">🕸️</span>
+          <span class="nav-text">知识图谱</span>
+        </div>
+        <div 
+          class="nav-item" 
           :class="{ active: activeTab === 'search' }"
           @click="selectTab('search')"
         >
@@ -62,6 +70,7 @@
       <transition name="fade" mode="out-in">
         <ChatView v-if="activeTab === 'chat'" key="chat" />
         <CatalogView v-else-if="activeTab === 'catalog'" key="catalog" />
+        <GraphView v-else-if="activeTab === 'graph'" key="graph" />
         <SearchView v-else-if="activeTab === 'search'" key="search" />
         <StatsView v-else-if="activeTab === 'stats'" key="stats" />
       </transition>
@@ -73,6 +82,7 @@
 import { ref, onMounted } from 'vue'
 import ChatView from './views/ChatView.vue'
 import CatalogView from './views/CatalogView.vue'
+import GraphView from './views/GraphView.vue'
 import SearchView from './views/SearchView.vue'
 import StatsView from './views/StatsView.vue'
 

@@ -151,4 +151,18 @@ export const catalogApi = {
   }
 }
 
+export const graphApi = {
+  getGraph() {
+    return api.get('/graph')
+  },
+
+  getKeywordNetwork(limit = 50) {
+    return api.get('/graph/keywords', { params: { limit } })
+  },
+
+  getCatalogGraph(catalogId) {
+    return api.get(`/graph/catalog/${catalogId}`)
+  }
+}
+
 export default api
