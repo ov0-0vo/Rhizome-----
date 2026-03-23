@@ -85,6 +85,8 @@ class VectorStoreManager:
             metadatas=[{"catalog_id": catalog_id or "unknown", "question": question}]
         )
 
+        
+
     def update_knowledge(self, knowledge_id: str, question: str, answer: str, catalog_id: str = None):
         doc = f"问题: {question}\n答案: {answer}"
         try:

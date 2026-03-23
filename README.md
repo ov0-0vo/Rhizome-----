@@ -9,6 +9,7 @@
 - **知识目录管理** - 自动将知识分类到结构化目录
 - **智能检索优化** - 目录索引 + 向量检索，只查看相关知识
 - **知识图谱可视化** - 图形化展示知识关联，支持关键词网络
+- **飞书机器人** - 对接飞书，支持群聊问答和知识管理
 - **Markdown 渲染** - 知识详情支持 Markdown 格式展示
 - **多模型支持** - OpenAI、Anthropic、Ollama、Azure OpenAI
 - **本地嵌入模型** - 支持 HuggingFace 本地模型，离线可用
@@ -192,6 +193,10 @@ rhizome/
 - `GET /api/graph/keywords` - 获取关键词网络图谱
 - `GET /api/graph/catalog/{catalog_id}` - 获取指定目录的知识图谱
 
+### 飞书机器人
+- `POST /api/feishu/webhook` - 飞书事件回调接口
+- `GET /api/feishu/status` - 获取飞书机器人状态
+
 ## 前端功能
 
 ### 对话页面
@@ -222,6 +227,54 @@ rhizome/
 - 节点拖拽和缩放交互
 - 点击节点查看详情
 - 力导向自动布局
+
+## 飞书机器人配置
+
+### 1. 创建飞书应用
+
+1. 访问 [飞书开放平台](https://open.feishu.cn/)
+2. 创建企业自建应用
+3. 开通权限：`im:message`（获取与发送消息）
+
+### 2. 配置环境变量
+
+```env
+FEISHU_APP_ID=cli_xxxxxx
+FEISHU_APP_SECRET=xxxxxx
+FEISHU_ENCRYPT_KEY=          # 可选，消息加密密钥
+FEISHU_VERIFICATION_TOKEN=   # 可选，事件验证令牌
+```
+
+### 3. 配置事件订阅（长连接模式）
+
+在飞书应用后台配置事件订阅：
+- **订阅方式**：选择「使用长连接接收事件」
+- **订阅事件**：`im.message.receive_v1`（接收消息）
+
+### 4. 启动服务
+
+启动后端服务后，飞书长连接客户端会自动连接：
+
+```bash
+uv run python -m uvicorn backend.main:app --reload
+```
+
+日志会显示：
+```
+INFO: Feishu long poll client started
+INFO: Connecting to Feishu WebSocket...
+INFO: Connected to Feishu WebSocket successfully
+```
+
+### 5. 使用机器人
+
+| 命令 | 说明 |
+|------|------|
+| `/help` | 显示帮助信息 |
+| `/stats` | 查看知识库统计 |
+| `/search <关键词>` | 搜索知识 |
+
+直接发送问题，机器人会智能回答并自动保存知识。
 
 ## 许可证
 

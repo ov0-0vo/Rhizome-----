@@ -583,6 +583,81 @@ data: {"type": "done"}
 
 响应格式与 `/api/graph` 相同。
 
+### 5.4.5 飞书机器人接口
+
+**POST /api/feishu/webhook**
+
+飞书机器人事件回调接口，用于接收飞书推送的消息事件。
+
+请求头：
+| 参数 | 说明 |
+|------|------|
+| `X-Lark-Request-Timestamp` | 请求时间戳 |
+| `X-Lark-Request-Nonce` | 请求随机数 |
+| `X-Lark-Signature` | 请求签名 |
+
+请求体（URL 验证）：
+```json
+{
+    "type": "url_verification",
+    "challenge": "xxx"
+}
+```
+
+响应：
+```json
+{
+    "challenge": "xxx"
+}
+```
+
+请求体（消息事件）：
+```json
+{
+    "schema": "2.0",
+    "header": {
+        "event_id": "xxx",
+        "event_type": "im.message.receive_v1",
+        "token": "verification_token"
+    },
+    "event": {
+        "message": {
+            "message_id": "xxx",
+            "message_type": "text",
+            "content": "{\"text\": \"你好\"}",
+            "chat_id": "xxx"
+        },
+        "sender": {
+            "sender_id": { "user_id": "xxx" }
+        }
+    }
+}
+```
+
+**GET /api/feishu/status**
+
+获取飞书机器人配置状态。
+
+响应：
+```json
+{
+    "enabled": true,
+    "app_id": "cli_xxxx...",
+    "has_encrypt_key": true,
+    "has_verification_token": true
+}
+```
+
+**支持的命令**：
+
+| 命令 | 说明 |
+|------|------|
+| `/help` | 显示帮助信息 |
+| `/stats` | 查看知识库统计 |
+| `/search <关键词>` | 搜索知识 |
+
+直接发送问题，机器人会智能回答并保存知识。
+
 ## 5.5 数据模型
 
 ### 5.5.1 KnowledgeCatalog
