@@ -183,38 +183,68 @@ class ReviewManager:
             logger.warning(f"Knowledge not found: {knowledge_id}")
             return []
 
-        quizzes = []
-        for i in range(count):
-            quiz = self._generate_single_quiz(knowledge, quiz_type, difficulty)
-            if quiz:
-                quizzes.append(quiz)
+        return self._generate_quizzes_batch(knowledge, quiz_type, difficulty, count)
 
-        return quizzes
-
-    def _generate_single_quiz(
+    def _generate_quizzes_batch(
         self,
         knowledge: KnowledgeItem,
         quiz_type: QuizType,
-        difficulty: QuizDifficulty
-    ) -> Optional[Quiz]:
-        prompt = self._build_quiz_prompt(knowledge, quiz_type, difficulty)
+        difficulty: QuizDifficulty,
+        count: int
+    ) -> List[Quiz]:
+        prompt = self._build_quiz_prompt(knowledge, quiz_type, difficulty, count)
 
         try:
             llm = create_llm(streaming=False)
             response = llm.invoke(prompt)
             content = response.content
 
-            quiz = self._parse_quiz_response(content, knowledge.id, quiz_type, difficulty)
-            return quiz
+            quizzes = self._parse_quizzes_response(content, knowledge.id, quiz_type, difficulty)
+            return quizzes
         except Exception as e:
-            logger.error(f"Error generating quiz: {e}")
-            return None
+            logger.error(f"Error generating quizzes: {e}")
+            return []
+
+    def _parse_quizzes_response(
+        self,
+        content: str,
+        knowledge_id: str,
+        quiz_type: QuizType,
+        difficulty: QuizDifficulty
+    ) -> List[Quiz]:
+        import re
+
+        quizzes = []
+        try:
+            json_match = re.search(r'\{[\s\S]*\}', content)
+            if json_match:
+                data = json.loads(json_match.group())
+                
+                quiz_list = data.get("quizzes", [])
+                if not quiz_list and "question" in data:
+                    quiz_list = [data]
+
+                for q in quiz_list:
+                    quizzes.append(Quiz(
+                        knowledge_id=knowledge_id,
+                        question=q.get("question", ""),
+                        quiz_type=quiz_type,
+                        difficulty=difficulty,
+                        options=q.get("options", []),
+                        correct_answer=q.get("correct_answer", ""),
+                        explanation=q.get("explanation", "")
+                    ))
+        except Exception as e:
+            logger.error(f"Error parsing quizzes response: {e}")
+
+        return quizzes
 
     def _build_quiz_prompt(
         self,
         knowledge: KnowledgeItem,
         quiz_type: QuizType,
-        difficulty: QuizDifficulty
+        difficulty: QuizDifficulty,
+        count: int = 1
     ) -> str:
         difficulty_desc = {
             QuizDifficulty.EASY: "简单（考查基本概念理解）",
@@ -222,14 +252,21 @@ class ReviewManager:
             QuizDifficulty.HARD: "困难（考查深入分析和综合应用）"
         }
 
-        type_desc = {
-            QuizType.MULTIPLE_CHOICE: "选择题（提供4个选项，标注正确答案）",
-            QuizType.TRUE_FALSE: "判断题（判断对错，提供解释）",
-            QuizType.SHORT_ANSWER: "简答题（需要简短回答）",
-            QuizType.FILL_BLANK: "填空题（挖空关键概念）"
-        }
+        if quiz_type == QuizType.MULTIPLE_CHOICE:
+            return self._build_multiple_choice_prompt(knowledge, difficulty_desc[difficulty], count)
+        elif quiz_type == QuizType.SHORT_ANSWER:
+            return self._build_short_answer_prompt(knowledge, difficulty_desc[difficulty], count)
+        else:
+            return self._build_generic_prompt(knowledge, quiz_type, difficulty_desc[difficulty], count)
 
-        return f"""基于以下知识内容，生成一道{difficulty_desc[difficulty]}的{type_desc[quiz_type]}。
+    def _build_multiple_choice_prompt(
+        self,
+        knowledge: KnowledgeItem,
+        difficulty_desc: str,
+        count: int
+    ) -> str:
+        count_hint = f"共{count}道题" if count > 1 else ""
+        return f"""基于以下知识内容，生成{count}道{difficulty_desc}的选择题。{count_hint}
 
 知识问题：{knowledge.question}
 知识答案：{knowledge.answer}
@@ -237,45 +274,85 @@ class ReviewManager:
 
 请按以下JSON格式返回（不要包含其他内容）：
 {{
-    "question": "题目内容",
-    "options": ["选项A", "选项B", "选项C", "选项D"],
-    "correct_answer": "正确答案（选择题填选项字母如'A'，判断题填'正确'或'错误'，简答题填参考答案，填空题填正确答案）",
-    "explanation": "答案解析"
+    "quizzes": [
+        {{
+            "question": "题目内容（考查对知识点的理解，不要直接复制原文）",
+            "options": ["选项A", "选项B", "选项C", "选项D"],
+            "correct_answer": "A",
+            "explanation": "解析为什么这个答案正确，其他选项为什么错误"
+        }}
+    ]
 }}
 
-注意：
-1. 题目应该考查对知识点的理解，而不是死记硬背
-2. 干扰选项应该有一定迷惑性
-3. 解析要清晰说明为什么这个答案是对的
+出题要求：
+1. 题目要有实际应用场景，考查理解而非记忆
+2. 干扰选项要有一定迷惑性，但不能有歧义
+3. 正确答案分布要均匀（A/B/C/D都要有）
+4. 每道题考查不同的知识点角度
 """
 
-    def _parse_quiz_response(
+    def _build_short_answer_prompt(
         self,
-        content: str,
-        knowledge_id: str,
+        knowledge: KnowledgeItem,
+        difficulty_desc: str,
+        count: int
+    ) -> str:
+        count_hint = f"共{count}道题" if count > 1 else ""
+        return f"""基于以下知识内容，生成{count}道{difficulty_desc}的简答题。{count_hint}
+
+知识问题：{knowledge.question}
+知识答案：{knowledge.answer}
+关键词：{', '.join(knowledge.keywords) if knowledge.keywords else '无'}
+
+请按以下JSON格式返回（不要包含其他内容）：
+{{
+    "quizzes": [
+        {{
+            "question": "简答题题目（开放性问题，需要学生用自己的话回答）",
+            "options": [],
+            "correct_answer": "参考答案要点（简洁明了，包含关键概念）",
+            "explanation": "答案要点解析，说明关键概念和评分标准"
+        }}
+    ]
+}}
+
+出题要求：
+1. 题目要能引导学生思考和表达理解
+2. 问题要有明确的答题方向，但不要限制思路
+3. 参考答案要简洁，突出核心要点
+4. 可以包含"请举例说明"、"请解释原因"等开放性表述
+5. 避免直接问"什么是XXX"这类定义性问题，改为应用场景题
+"""
+
+    def _build_generic_prompt(
+        self,
+        knowledge: KnowledgeItem,
         quiz_type: QuizType,
-        difficulty: QuizDifficulty
-    ) -> Optional[Quiz]:
-        import json
-        import re
+        difficulty_desc: str,
+        count: int
+    ) -> str:
+        type_desc = {
+            QuizType.TRUE_FALSE: "判断题（判断对错，提供解释）",
+            QuizType.FILL_BLANK: "填空题（挖空关键概念）"
+        }
+        return f"""基于以下知识内容，生成{count}道{difficulty_desc}的{type_desc.get(quiz_type, '题目')}。
 
-        try:
-            json_match = re.search(r'\{[\s\S]*\}', content)
-            if json_match:
-                data = json.loads(json_match.group())
-                return Quiz(
-                    knowledge_id=knowledge_id,
-                    question=data.get("question", ""),
-                    quiz_type=quiz_type,
-                    difficulty=difficulty,
-                    options=data.get("options", []),
-                    correct_answer=data.get("correct_answer", ""),
-                    explanation=data.get("explanation", "")
-                )
-        except Exception as e:
-            logger.error(f"Error parsing quiz response: {e}")
+知识问题：{knowledge.question}
+知识答案：{knowledge.answer}
+关键词：{', '.join(knowledge.keywords) if knowledge.keywords else '无'}
 
-        return None
+请按以下JSON格式返回（不要包含其他内容）：
+{{
+    "quizzes": [
+        {{
+            "question": "题目内容",
+            "options": [],
+            "correct_answer": "正确答案",
+            "explanation": "答案解析"
+        }}
+    ]
+}}
+"""
 
     def evaluate_answer(
         self,
