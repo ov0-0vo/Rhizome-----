@@ -77,6 +77,7 @@ class QAAgent:
         self._catalog_matching_chain = create_chain(CATALOG_MATCHING_PROMPT, self.llm_non_streaming)
         self._knowledge_summarization_chain = create_chain(KNOWLEDGE_SUMMARIZATION_PROMPT, self.llm_non_streaming)
         self._answer_with_context_chain = create_chain(ANSWER_WITH_CONTEXT_PROMPT, self.llm_non_streaming)
+        self._answer_with_context_chain_streaming = create_chain(ANSWER_WITH_CONTEXT_PROMPT, self.llm)
 
     def analyze_question(self, question: str) -> Dict[str, Any]:
         try:
@@ -297,7 +298,7 @@ class QAAgent:
                 for i, k in enumerate(context_knowledge)
             ])
             prompt_input = {"context": context, "question": question}
-            for chunk in self._stream_answer(self._answer_with_context_chain, prompt_input):
+            for chunk in self._stream_answer(self._answer_with_context_chain_streaming, prompt_input):
                 yield chunk
         else:
             messages = [

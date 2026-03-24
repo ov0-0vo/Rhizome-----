@@ -41,6 +41,25 @@ class FeishuClient:
             return False
         
         return True
+
+    def reply_text_with_id(self, message_id: str, text: str) -> Optional[str]:
+        from lark_oapi.api.im.v1 import ReplyMessageRequest, ReplyMessageRequestBody
+        
+        request = ReplyMessageRequest.builder() \
+            .message_id(message_id) \
+            .request_body(ReplyMessageRequestBody.builder()
+                .msg_type("text")
+                .content(json.dumps({"text": text}))
+                .build()) \
+            .build()
+        
+        response = self.client.im.v1.message.reply(request)
+        
+        if not response.success():
+            logger.error(f"Reply message failed: code={response.code}, msg={response.msg}")
+            return None
+        
+        return response.data.message_id
     
     def reply_card(self, message_id: str, card: Dict[str, Any]) -> bool:
         from lark_oapi.api.im.v1 import ReplyMessageRequest, ReplyMessageRequestBody
@@ -60,6 +79,25 @@ class FeishuClient:
             return False
         
         return True
+
+    def reply_card_with_id(self, message_id: str, card: Dict[str, Any]) -> Optional[str]:
+        from lark_oapi.api.im.v1 import ReplyMessageRequest, ReplyMessageRequestBody
+        
+        request = ReplyMessageRequest.builder() \
+            .message_id(message_id) \
+            .request_body(ReplyMessageRequestBody.builder()
+                .msg_type("interactive")
+                .content(json.dumps(card))
+                .build()) \
+            .build()
+        
+        response = self.client.im.v1.message.reply(request)
+        
+        if not response.success():
+            logger.error(f"Reply card failed: code={response.code}, msg={response.msg}")
+            return None
+        
+        return response.data.message_id
     
     def send_text(self, receive_id: str, text: str, receive_id_type: str = "chat_id") -> bool:
         from lark_oapi.api.im.v1 import CreateMessageRequest, CreateMessageRequestBody
@@ -155,3 +193,49 @@ class FeishuClient:
                 }
             ]
         }
+
+    def push_follow_up(self, message_id: str, content: str = "机器人正在处理中...") -> bool:
+        try:
+            from lark_oapi.api.im.v1 import PushFollowUpRequest, PushFollowUpRequestBody, FollowUp
+            
+            follow_up = FollowUp.builder().content(content).build()
+
+            request = PushFollowUpRequest.builder() \
+                .message_id(message_id) \
+                .request_body(PushFollowUpRequestBody.builder()
+                    .follow_ups([follow_up])
+                    .build()) \
+                .build()
+
+            response = self.client.im.v1.message.push_follow_up(request)
+
+            if not response.success():
+                logger.error(f"Push follow up failed: code={response.code}, msg={response.msg}")
+                return False
+
+            return True
+        except ImportError:
+            logger.warning("PushFollowUpRequest not available in current lark-oapi version, skipping follow up")
+            return True
+
+    def edit_card(self, message_id: str, card: Dict[str, Any]) -> bool:
+        try:
+            from lark_oapi.api.im.v1 import PatchMessageRequest, PatchMessageRequestBody
+
+            request = PatchMessageRequest.builder() \
+                .message_id(message_id) \
+                .request_body(PatchMessageRequestBody.builder()
+                    .content(json.dumps(card))
+                    .build()) \
+                .build()
+
+            response = self.client.im.v1.message.patch(request)
+
+            if not response.success():
+                logger.error(f"Edit message failed: code={response.code}, msg={response.msg}")
+                return False
+
+            return True
+        except ImportError:
+            logger.warning("PatchMessageRequest not available in current lark-oapi version, skipping message edit")
+            return True
