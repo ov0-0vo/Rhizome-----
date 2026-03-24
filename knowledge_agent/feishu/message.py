@@ -20,6 +20,7 @@ class FeishuMessageHandler:
         self.client = FeishuClient()
         self.qa_agent = qa_agent
         self.processed_message_ids = OrderedDict()
+        self._lock = threading.Lock()
 
     def handle_message(self, event) -> None:
         try:
@@ -28,16 +29,17 @@ class FeishuMessageHandler:
             message_type = message.message_type
             content = message.content
 
-            if message_id in self.processed_message_ids:
-                logger.info(f"Duplicate message detected: {message_id}, skipping")
-                return
+            with self._lock:
+                if message_id in self.processed_message_ids:
+                    logger.info(f"Duplicate message detected: {message_id}, skipping")
+                    return
 
-            self._cleanup_expired_messages()
-            
-            if len(self.processed_message_ids) >= MAX_PROCESSED_MESSAGES:
-                self.processed_message_ids.popitem(last=False)
-            
-            self.processed_message_ids[message_id] = time.time()
+                self._cleanup_expired_messages_unlocked()
+
+                if len(self.processed_message_ids) >= MAX_PROCESSED_MESSAGES:
+                    self.processed_message_ids.popitem(last=False)
+
+                self.processed_message_ids[message_id] = time.time()
 
             sender = event.event.sender
             sender_id = sender.sender_id.user_id if sender.sender_id else None
@@ -65,7 +67,7 @@ class FeishuMessageHandler:
         except Exception as e:
             logger.error(f"Error handling message: {e}", exc_info=True)
 
-    def _cleanup_expired_messages(self) -> None:
+    def _cleanup_expired_messages_unlocked(self) -> None:
         current_time = time.time()
         expired_ids = [
             msg_id for msg_id, timestamp in self.processed_message_ids.items()
