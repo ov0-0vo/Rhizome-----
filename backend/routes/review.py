@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
+import json
 
 from ..dependencies import get_review_manager
 from knowledge_agent.review import (
@@ -147,6 +149,41 @@ async def generate_quiz(
             for q in quizzes
         ]
     }
+
+
+@router.post("/quiz/generate/stream")
+async def generate_quiz_stream(
+    request: QuizGenerateRequest,
+    manager: ReviewManager = Depends(get_review_manager)
+):
+    """流式生成习题"""
+    try:
+        quiz_type = QuizType(request.quiz_type)
+    except ValueError:
+        quiz_type = QuizType.MULTIPLE_CHOICE
+
+    try:
+        difficulty = QuizDifficulty(request.difficulty)
+    except ValueError:
+        difficulty = QuizDifficulty.MEDIUM
+
+    def event_generator():
+        for event in manager.generate_quiz_stream(
+            knowledge_id=request.knowledge_id,
+            quiz_type=quiz_type,
+            difficulty=difficulty,
+            count=request.count
+        ):
+            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        }
+    )
 
 
 @router.post("/quiz/evaluate", response_model=QuizResultResponse)

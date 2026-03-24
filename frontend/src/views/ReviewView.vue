@@ -136,7 +136,12 @@
           <div class="quiz-mode" v-else>
             <div class="quiz-loading" v-if="quizLoading">
               <div class="spinner"></div>
-              <p>正在生成习题...</p>
+              <p>{{ generatingText || '正在生成习题...' }}</p>
+              <div class="generated-quizzes" v-if="quizzes.length > 0">
+                <div class="generated-badge" v-for="(q, i) in quizzes" :key="q.id">
+                  题目 {{ i + 1 }} ✓
+                </div>
+              </div>
             </div>
 
             <div class="quiz-container" v-else-if="currentQuiz">
@@ -258,6 +263,7 @@ const quizSubmitted = ref(false)
 const selectedAnswer = ref('')
 const quizResult = ref(null)
 const quizResults = ref([])
+const generatingText = ref('')
 
 const currentQuiz = computed(() => quizzes.value[currentQuizIndex.value] || null)
 
@@ -329,21 +335,41 @@ const startQuiz = async (quizType = 'multiple_choice') => {
   quizSubmitted.value = false
   selectedAnswer.value = ''
   quizResult.value = null
+  generatingText.value = ''
 
   try {
-    const res = await reviewApi.generateQuiz(
+    const resultQuizzes = await reviewApi.generateQuizStream(
       selectedKnowledge.value.knowledge.id,
       quizType,
       'medium',
-      3
+      3,
+      (event) => {
+        if (event.type === 'status') {
+          generatingText.value = event.message
+        } else if (event.type === 'progress') {
+          generatingText.value += event.content
+        } else if (event.type === 'quiz') {
+          quizzes.value.push(event.quiz)
+          generatingText.value = `已生成 ${event.index + 1}/${event.total} 道题目`
+        } else if (event.type === 'done') {
+          generatingText.value = `生成完成，共 ${event.total} 道题目`
+        } else if (event.type === 'error') {
+          alert('生成习题失败: ' + event.message)
+        }
+      }
     )
-    quizzes.value = res.data.quizzes
+    
+    if (quizzes.value.length === 0) {
+      alert('未能生成习题，请稍后重试')
+      reviewMode.value = 'read'
+    }
   } catch (e) {
     console.error('Failed to generate quiz:', e)
     alert('生成习题失败，请稍后重试')
     reviewMode.value = 'read'
   } finally {
     quizLoading.value = false
+    generatingText.value = ''
   }
 }
 
@@ -821,6 +847,35 @@ onMounted(() => {
   justify-content: center;
   padding: 40px;
   color: var(--text-secondary);
+  gap: 16px;
+}
+
+.generated-quizzes {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.generated-badge {
+  padding: 6px 12px;
+  background: var(--primary-light);
+  color: var(--primary-color);
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 500;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .spinner {

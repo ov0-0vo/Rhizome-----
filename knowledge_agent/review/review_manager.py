@@ -1,7 +1,8 @@
 import json
 import logging
+import re
 from datetime import datetime, timedelta
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Generator
 from pathlib import Path
 
 from .models import (
@@ -205,6 +206,60 @@ class ReviewManager:
             logger.error(f"Error generating quizzes: {e}")
             return []
 
+    def generate_quiz_stream(
+        self,
+        knowledge_id: str,
+        quiz_type: QuizType = QuizType.MULTIPLE_CHOICE,
+        difficulty: QuizDifficulty = QuizDifficulty.MEDIUM,
+        count: int = 3
+    ) -> Generator[Dict[str, Any], None, None]:
+        knowledge = self.knowledge_store.get_knowledge(knowledge_id)
+        if not knowledge:
+            logger.warning(f"Knowledge not found: {knowledge_id}")
+            yield {"type": "error", "message": "Knowledge not found"}
+            return
+
+        prompt = self._build_quiz_prompt(knowledge, quiz_type, difficulty, count)
+
+        yield {"type": "status", "message": "正在生成习题..."}
+
+        try:
+            llm = create_llm(streaming=True)
+            full_content = ""
+
+            for chunk in llm.stream(prompt):
+                if hasattr(chunk, 'content'):
+                    full_content += chunk.content
+                else:
+                    full_content += str(chunk)
+
+                yield {"type": "progress", "content": chunk.content if hasattr(chunk, 'content') else str(chunk)}
+
+            quizzes = self._parse_quizzes_response(full_content, knowledge.id, quiz_type, difficulty)
+
+            for i, quiz in enumerate(quizzes):
+                yield {
+                    "type": "quiz",
+                    "index": i,
+                    "total": len(quizzes),
+                    "quiz": {
+                        "id": quiz.id,
+                        "knowledge_id": quiz.knowledge_id,
+                        "question": quiz.question,
+                        "quiz_type": quiz.quiz_type.value,
+                        "difficulty": quiz.difficulty.value,
+                        "options": quiz.options,
+                        "correct_answer": quiz.correct_answer,
+                        "explanation": quiz.explanation
+                    }
+                }
+
+            yield {"type": "done", "total": len(quizzes)}
+
+        except Exception as e:
+            logger.error(f"Error generating quizzes stream: {e}")
+            yield {"type": "error", "message": str(e)}
+
     def _parse_quizzes_response(
         self,
         content: str,
@@ -212,8 +267,6 @@ class ReviewManager:
         quiz_type: QuizType,
         difficulty: QuizDifficulty
     ) -> List[Quiz]:
-        import re
-
         quizzes = []
         try:
             json_match = re.search(r'\{[\s\S]*\}', content)

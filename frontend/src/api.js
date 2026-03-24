@@ -185,6 +185,63 @@ export const reviewApi = {
     })
   },
 
+  generateQuizStream(knowledgeId, quizType = 'multiple_choice', difficulty = 'medium', count = 3, onEvent) {
+    return new Promise((resolve, reject) => {
+      fetch('/api/review/quiz/generate/stream', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          knowledge_id: knowledgeId,
+          quiz_type: quizType,
+          difficulty: difficulty,
+          count: count
+        })
+      }).then(response => {
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder()
+        const quizzes = []
+
+        function read() {
+          reader.read().then(({ done, value }) => {
+            if (done) {
+              resolve(quizzes)
+              return
+            }
+
+            const text = decoder.decode(value, { stream: true })
+            const lines = text.split('\n')
+
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                try {
+                  const event = JSON.parse(line.slice(6))
+                  
+                  if (event.type === 'quiz') {
+                    quizzes.push(event.quiz)
+                  }
+                  
+                  if (onEvent) {
+                    onEvent(event)
+                  }
+                } catch (e) {
+                  console.error('Parse error:', e)
+                }
+              }
+            }
+
+            read()
+          })
+        }
+
+        read()
+      }).catch(error => {
+        reject(error)
+      })
+    })
+  },
+
   evaluateQuiz(quiz, userAnswer, correctAnswer, explanation = '') {
     return api.post('/review/quiz/evaluate', {
       quiz: quiz,
