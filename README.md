@@ -10,6 +10,9 @@
 - **智能检索优化** - 目录索引 + 向量检索，只查看相关知识
 - **知识图谱可视化** - 图形化展示知识关联，支持关键词网络
 - **飞书机器人** - 对接飞书，支持群聊问答和知识管理
+  - 流式回复：答案逐步显示，实时更新
+  - 消息去重：防止重复处理同一条消息
+  - 跟随气泡：显示"正在处理"提示（SDK 版本依赖）
 - **Markdown 渲染** - 知识详情支持 Markdown 格式展示
 - **多模型支持** - OpenAI、Anthropic、Ollama、Azure OpenAI
 - **本地嵌入模型** - 支持 HuggingFace 本地模型，离线可用
@@ -69,6 +72,10 @@ OPENAI_MODEL=gpt-3.5-turbo
 # 嵌入模型配置（可选，默认使用本地 HuggingFace 模型）
 EMBEDDING_PROVIDER=local
 EMBEDDING_MODEL=BAAI/bge-small-zh-v1.5
+
+# 飞书机器人配置（可选）
+FEISHU_APP_ID=cli_xxxxxx
+FEISHU_APP_SECRET=xxxxxx
 ```
 
 **提示**：首次使用 HuggingFace 模型时会自动下载到本地缓存 (`~/.cache/huggingface/hub`)，后续使用离线模式，无需网络连接。
@@ -109,7 +116,8 @@ rhizome/
 │       ├── chat.py        # 对话接口（支持 SSE 流式）
 │       ├── knowledge.py   # 知识管理接口
 │       ├── catalog.py     # 目录管理接口
-│       └── graph.py       # 知识图谱接口
+│       ├── graph.py       # 知识图谱接口
+│       └── feishu.py      # 飞书状态接口
 ├── frontend/              # Vue 3 前端
 │   ├── src/
 │   │   ├── views/        # 页面组件
@@ -128,6 +136,11 @@ rhizome/
 │   ├── agent/            # Agent 模块
 │   │   ├── qa_agent.py   # QA Agent（支持流式）
 │   │   └── prompt_templates.py
+│   ├── feishu/           # 飞书机器人模块
+│   │   ├── client.py     # API 客户端（消息发送、编辑）
+│   │   ├── message.py    # 消息处理器（流式回复、去重）
+│   │   ├── longpoll.py   # 长连接客户端
+│   │   └── config.py     # 飞书配置
 │   ├── knowledge/        # 知识管理
 │   │   ├── catalog_manager.py
 │   │   ├── knowledge_store.py
@@ -141,6 +154,7 @@ rhizome/
 │   ├── knowledge.json    # 知识条目
 │   └── vector_store/     # 向量存储
 ├── doc/                  # 技术文档
+├── docs/                 # 集成文档
 ├── tests/                # 测试文件
 └── scripts/              # 工具脚本
 ```
@@ -228,15 +242,26 @@ rhizome/
 - 点击节点查看详情
 - 力导向自动布局
 
-## 飞书机器人配置
+## 飞书机器人
 
-### 1. 创建飞书应用
+### 功能特性
+
+| 功能 | 说明 |
+|------|------|
+| 流式回复 | 答案逐步显示，每 0.5 秒更新一次 |
+| 消息去重 | 使用 LRU 缓存防止重复处理消息 |
+| 跟随气泡 | 显示"正在处理"提示（需 SDK 支持） |
+| 自动保存 | 对话内容自动保存到知识库 |
+
+### 配置步骤
+
+#### 1. 创建飞书应用
 
 1. 访问 [飞书开放平台](https://open.feishu.cn/)
 2. 创建企业自建应用
 3. 开通权限：`im:message`（获取与发送消息）
 
-### 2. 配置环境变量
+#### 2. 配置环境变量
 
 ```env
 FEISHU_APP_ID=cli_xxxxxx
@@ -245,13 +270,13 @@ FEISHU_ENCRYPT_KEY=          # 可选，消息加密密钥
 FEISHU_VERIFICATION_TOKEN=   # 可选，事件验证令牌
 ```
 
-### 3. 配置事件订阅（长连接模式）
+#### 3. 配置事件订阅（长连接模式）
 
 在飞书应用后台配置事件订阅：
 - **订阅方式**：选择「使用长连接接收事件」
 - **订阅事件**：`im.message.receive_v1`（接收消息）
 
-### 4. 启动服务
+#### 4. 启动服务
 
 启动后端服务后，飞书长连接客户端会自动连接：
 
@@ -266,7 +291,7 @@ INFO: Connecting to Feishu WebSocket...
 INFO: Connected to Feishu WebSocket successfully
 ```
 
-### 5. 使用机器人
+#### 5. 使用机器人
 
 | 命令 | 说明 |
 |------|------|
@@ -275,6 +300,28 @@ INFO: Connected to Feishu WebSocket successfully
 | `/search <关键词>` | 搜索知识 |
 
 直接发送问题，机器人会智能回答并自动保存知识。
+
+### 流式回复实现
+
+飞书机器人支持流式回复，用户可以看到答案逐步生成：
+
+```
+用户发送消息
+    ↓
+机器人回复"🤔 正在思考中..."卡片
+    ↓
+每 0.5 秒更新卡片内容（显示逐步生成的答案）
+    ↓
+流式结束后更新最终内容
+    ↓
+后台线程保存知识到知识库
+```
+
+**技术细节**：
+- 使用 `edit_card()` API 更新消息内容
+- 节流间隔 0.5 秒，避免 API 频率限制
+- 消息去重使用 `OrderedDict` 实现 LRU 缓存
+- 最大缓存 1000 条，过期时间 1 小时
 
 ## 许可证
 

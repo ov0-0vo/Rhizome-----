@@ -4,6 +4,15 @@
 
 本文档记录了 Rhizome 项目集成飞书机器人过程中遇到的问题及解决方案。飞书机器人使用长连接模式（WebSocket）接收消息事件，无需公网服务器。
 
+## 功能特性
+
+| 功能 | 说明 |
+|------|------|
+| 流式回复 | 答案逐步显示，每 0.5 秒更新一次 |
+| 消息去重 | 使用 LRU 缓存防止重复处理消息 |
+| 跟随气泡 | 显示"正在处理"提示（需 SDK 支持） |
+| 自动保存 | 对话内容自动保存到知识库 |
+
 ## 架构设计
 
 ```
@@ -25,10 +34,150 @@
 knowledge_agent/feishu/
 ├── __init__.py          # 模块导出
 ├── config.py            # 配置管理
-├── client.py            # API 客户端（发送消息）
-├── message.py           # 消息处理器
+├── client.py            # API 客户端（发送消息、编辑消息）
+├── message.py           # 消息处理器（流式回复、去重）
 └── longpoll.py          # 长连接客户端
 ```
+
+## 流式回复实现
+
+### 流程图
+
+```
+用户发送消息
+    ↓
+机器人回复"🤔 正在思考中..."卡片
+    ↓
+添加跟随气泡"正在处理您的问题..."（SDK 版本依赖）
+    ↓
+调用 QA Agent 流式生成答案
+    ↓
+每 0.5 秒更新一次卡片内容（带"⏳ 正在生成..."提示）
+    ↓
+流式结束后更新最终内容（移除生成提示）
+    ↓
+后台线程保存知识到知识库
+```
+
+### 核心代码
+
+#### message.py - 流式回复处理
+
+```python
+def _handle_question_stream(self, message_id: str, question: str) -> None:
+    # 1. 发送"正在思考中..."卡片
+    processing_card = {
+        "config": {"wide_screen_mode": True},
+        "elements": [{"tag": "markdown", "content": "🤔 **正在思考中...**"}]
+    }
+    reply_msg_id = self.client.reply_card_with_id(message_id, processing_card)
+
+    # 2. 添加跟随气泡（SDK 版本依赖）
+    if reply_msg_id:
+        self.client.push_follow_up(reply_msg_id, "正在处理您的问题...")
+
+    # 3. 获取流式迭代器
+    stream_iter, metadata = self.qa_agent.chat_with_stream(question)
+    keywords = metadata.get("analysis", {}).get("keywords", [])
+
+    # 4. 节流更新卡片
+    accumulated_content = ""
+    last_update_time = 0
+
+    for chunk in stream_iter:
+        accumulated_content += chunk
+        now = time.time()
+
+        if (now - last_update_time) >= 0.5:  # 每 0.5 秒更新一次
+            self._update_streaming_card(reply_msg_id, question, accumulated_content, keywords)
+            last_update_time = now
+
+    # 5. 更新最终内容
+    self._update_streaming_card(reply_msg_id, question, accumulated_content, keywords, is_final=True)
+```
+
+#### client.py - 消息编辑
+
+```python
+def edit_card(self, message_id: str, card: Dict[str, Any]) -> bool:
+    try:
+        from lark_oapi.api.im.v1 import PatchMessageRequest, PatchMessageRequestBody
+
+        request = PatchMessageRequest.builder() \
+            .message_id(message_id) \
+            .request_body(PatchMessageRequestBody.builder()
+                .content(json.dumps(card))
+                .build()) \
+            .build()
+
+        response = self.client.im.v1.message.patch(request)
+        return response.success()
+    except ImportError:
+        logger.warning("PatchMessageRequest not available in current lark-oapi version")
+        return True
+```
+
+### 节流控制
+
+| 参数 | 值 | 说明 |
+|------|-----|------|
+| `UPDATE_THROTTLE_INTERVAL` | 0.5 秒 | 更新间隔，避免 API 频率限制 |
+
+## 消息去重实现
+
+### 问题背景
+
+飞书 WebSocket 客户端可能会发送重复的消息事件，导致机器人重复处理同一条消息。
+
+### 解决方案
+
+使用 `OrderedDict` 实现 LRU 缓存：
+
+```python
+from collections import OrderedDict
+
+MAX_PROCESSED_MESSAGES = 1000    # 最大缓存数量
+MESSAGE_EXPIRE_SECONDS = 3600    # 过期时间（1小时）
+
+class FeishuMessageHandler:
+    def __init__(self, qa_agent=None):
+        self.processed_message_ids = OrderedDict()
+
+    def handle_message(self, event) -> None:
+        message_id = message.message_id
+
+        # 消息去重检查
+        if message_id in self.processed_message_ids:
+            logger.info(f"Duplicate message detected: {message_id}, skipping")
+            return
+
+        # 清理过期消息
+        self._cleanup_expired_messages()
+
+        # LRU 淘汰
+        if len(self.processed_message_ids) >= MAX_PROCESSED_MESSAGES:
+            self.processed_message_ids.popitem(last=False)
+
+        # 记录消息 ID 和时间戳
+        self.processed_message_ids[message_id] = time.time()
+
+    def _cleanup_expired_messages(self) -> None:
+        current_time = time.time()
+        expired_ids = [
+            msg_id for msg_id, timestamp in self.processed_message_ids.items()
+            if current_time - timestamp > MESSAGE_EXPIRE_SECONDS
+        ]
+        for msg_id in expired_ids:
+            del self.processed_message_ids[msg_id]
+```
+
+### 为什么是 1 小时？
+
+| 场景 | 说明 |
+|------|------|
+| 正常情况 | 飞书重复推送通常在几秒内发生 |
+| 异常情况 | 网络延迟可能导致延迟推送，但极少超过 1 小时 |
+| 结论 | 1 小时足够覆盖所有重复推送场景 |
 
 ## 遇到的问题与解决方案
 
@@ -127,15 +276,12 @@ RuntimeError: This event loop is already running
            self._thread.start()
        
        def _run_in_new_loop(self):
-           # 创建新的事件循环
            new_loop = asyncio.new_event_loop()
            asyncio.set_event_loop(new_loop)
            
-           # 延迟导入
            import lark_oapi as lark
            
            try:
-               # 运行 WebSocket 客户端
                self._ws_client = lark.ws.Client(...)
                self._ws_client.start()
            finally:
@@ -182,135 +328,36 @@ return {
 
 ---
 
-## 关键代码示例
+### 问题 5: PatchMessageRequestBody 无 msg_type 属性
 
-### 配置 (config.py)
-
-```python
-import os
-from dataclasses import dataclass, field
-from dotenv import load_dotenv
-
-load_dotenv()
-
-@dataclass
-class FeishuConfig:
-    app_id: str = field(default_factory=lambda: os.getenv("FEISHU_APP_ID", ""))
-    app_secret: str = field(default_factory=lambda: os.getenv("FEISHU_APP_SECRET", ""))
-    
-    @property
-    def enabled(self) -> bool:
-        return bool(self.app_id and self.app_secret)
+**错误信息:**
+```
+AttributeError: 'PatchMessageRequestBodyBuilder' object has no attribute 'msg_type'
 ```
 
-### 长连接客户端 (longpoll.py)
+**原因:**
+当前版本的 lark-oapi SDK 中，`PatchMessageRequestBodyBuilder` 类没有 `msg_type` 方法。
+
+**解决方案:**
+移除不必要的 `msg_type` 调用：
 
 ```python
-import asyncio
-import threading
-from typing import Optional
+# 错误做法
+request = PatchMessageRequest.builder() \
+    .message_id(message_id) \
+    .request_body(PatchMessageRequestBody.builder()
+        .msg_type("interactive")  # 不支持！
+        .content(json.dumps(card))
+        .build()) \
+    .build()
 
-from .config import feishu_config
-from .message import FeishuMessageHandler
-
-class FeishuLongPollClient:
-    def __init__(self, message_handler: FeishuMessageHandler = None):
-        self.config = feishu_config
-        self.message_handler = message_handler
-        self._running = False
-        self._ws_client = None
-        self._thread: Optional[threading.Thread] = None
-    
-    def connect(self):
-        if not self.config.enabled:
-            return
-        
-        self._running = True
-        self._thread = threading.Thread(target=self._run_in_new_loop, daemon=True)
-        self._thread.start()
-    
-    def _run_in_new_loop(self):
-        new_loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(new_loop)
-        
-        import lark_oapi as lark
-        
-        try:
-            while self._running:
-                try:
-                    self._start_ws_client(lark)
-                except Exception as e:
-                    import time
-                    time.sleep(5)
-        finally:
-            new_loop.close()
-    
-    def _start_ws_client(self, lark):
-        def on_message(data: lark.im.v1.P2ImMessageReceiveV1) -> None:
-            self.message_handler.handle_message(data)
-        
-        event_handler = lark.EventDispatcherHandler.builder("", "") \
-            .register_p2_im_message_receive_v1(on_message) \
-            .build()
-        
-        self._ws_client = lark.ws.Client(
-            self.config.app_id,
-            self.config.app_secret,
-            event_handler=event_handler
-        )
-        self._ws_client.start()
-    
-    def stop(self):
-        self._running = False
-```
-
-### API 客户端 (client.py)
-
-```python
-import json
-from typing import Dict, Any
-
-class FeishuClient:
-    def __init__(self):
-        self._client = None
-    
-    @property
-    def client(self):
-        if self._client is None:
-            import lark_oapi as lark
-            self._client = lark.Client.builder() \
-                .app_id(feishu_config.app_id) \
-                .app_secret(feishu_config.app_secret) \
-                .build()
-        return self._client
-    
-    def reply_text(self, message_id: str, text: str) -> bool:
-        from lark_oapi.api.im.v1 import ReplyMessageRequest, ReplyMessageRequestBody
-        
-        request = ReplyMessageRequest.builder() \
-            .message_id(message_id) \
-            .request_body(ReplyMessageRequestBody.builder()
-                .msg_type("text")
-                .content(json.dumps({"text": text}))
-                .build()) \
-            .build()
-        
-        response = self.client.im.v1.message.reply(request)
-        return response.success()
-    
-    def reply_card(self, message_id: str, card: Dict[str, Any]) -> bool:
-        from lark_oapi.api.im.v1 import ReplyMessageRequest, ReplyMessageRequestBody
-        
-        request = ReplyMessageRequest.builder() \
-            .message_id(message_id) \
-            .request_body(ReplyMessageRequestBody.builder()
-                .msg_type("interactive")
-                .content(json.dumps(card))
-                .build()) \
-            .build()
-        
-        response = self.client.im.v1.message.reply(request)
-        return response.success()
+# 正确做法
+request = PatchMessageRequest.builder() \
+    .message_id(message_id) \
+    .request_body(PatchMessageRequestBody.builder()
+        .content(json.dumps(card))
+        .build()) \
+    .build()
 ```
 
 ---
@@ -342,6 +389,8 @@ FEISHU_APP_SECRET=xxxxxxxxxxxxxxxx
 3. **实现重连机制** - 连接断开后自动重连
 4. **简化卡片格式** - 使用 markdown 标签避免兼容性问题
 5. **3 秒响应限制** - 长连接模式要求 3 秒内处理完成
+6. **消息去重** - 使用 LRU 缓存防止重复处理
+7. **节流控制** - 流式更新间隔 ≥ 0.5 秒
 
 ---
 

@@ -556,3 +556,165 @@ const simulateForces = () => {
     // 向中心的引力
 }
 ```
+
+## 3.7 飞书机器人模块 (feishu/)
+
+### 3.7.1 模块概述
+
+飞书机器人模块实现了与飞书开放平台的集成，支持长连接模式接收消息事件，并提供流式回复功能。
+
+```
+knowledge_agent/feishu/
+├── __init__.py          # 模块导出
+├── config.py            # 配置管理
+├── client.py            # API 客户端
+├── message.py           # 消息处理器
+└── longpoll.py          # 长连接客户端
+```
+
+### 3.7.2 配置管理 (config.py)
+
+```python
+@dataclass
+class FeishuConfig:
+    app_id: str = field(default_factory=lambda: os.getenv("FEISHU_APP_ID", ""))
+    app_secret: str = field(default_factory=lambda: os.getenv("FEISHU_APP_SECRET", ""))
+    
+    @property
+    def enabled(self) -> bool:
+        return bool(self.app_id and self.app_secret)
+```
+
+### 3.7.3 API 客户端 (client.py)
+
+`FeishuClient` 封装了飞书 API 调用：
+
+| 方法 | 说明 |
+|------|------|
+| `reply_text()` | 回复文本消息 |
+| `reply_text_with_id()` | 回复文本消息并返回消息 ID |
+| `reply_card()` | 回复卡片消息 |
+| `reply_card_with_id()` | 回复卡片消息并返回消息 ID |
+| `edit_card()` | 编辑已发送的消息内容 |
+| `push_follow_up()` | 添加跟随气泡（SDK 版本依赖） |
+
+**消息编辑示例**：
+
+```python
+def edit_card(self, message_id: str, card: Dict[str, Any]) -> bool:
+    from lark_oapi.api.im.v1 import PatchMessageRequest, PatchMessageRequestBody
+
+    request = PatchMessageRequest.builder() \
+        .message_id(message_id) \
+        .request_body(PatchMessageRequestBody.builder()
+            .content(json.dumps(card))
+            .build()) \
+        .build()
+
+    response = self.client.im.v1.message.patch(request)
+    return response.success()
+```
+
+### 3.7.4 消息处理器 (message.py)
+
+`FeishuMessageHandler` 处理消息事件：
+
+**核心功能**：
+
+| 功能 | 说明 |
+|------|------|
+| 消息去重 | 使用 LRU 缓存防止重复处理 |
+| 流式回复 | 答案逐步显示，每 0.5 秒更新一次 |
+| 命令处理 | 支持 `/help`、`/stats`、`/search` 命令 |
+
+**消息去重实现**：
+
+```python
+from collections import OrderedDict
+
+MAX_PROCESSED_MESSAGES = 1000
+MESSAGE_EXPIRE_SECONDS = 3600
+
+class FeishuMessageHandler:
+    def __init__(self, qa_agent=None):
+        self.processed_message_ids = OrderedDict()
+
+    def handle_message(self, event) -> None:
+        message_id = message.message_id
+
+        if message_id in self.processed_message_ids:
+            return
+
+        self._cleanup_expired_messages()
+
+        if len(self.processed_message_ids) >= MAX_PROCESSED_MESSAGES:
+            self.processed_message_ids.popitem(last=False)
+
+        self.processed_message_ids[message_id] = time.time()
+```
+
+**流式回复流程**：
+
+```python
+def _handle_question_stream(self, message_id: str, question: str) -> None:
+    # 1. 发送"正在思考中..."卡片
+    reply_msg_id = self.client.reply_card_with_id(message_id, processing_card)
+
+    # 2. 获取流式迭代器
+    stream_iter, metadata = self.qa_agent.chat_with_stream(question)
+
+    # 3. 节流更新卡片
+    for chunk in stream_iter:
+        accumulated_content += chunk
+        if (now - last_update_time) >= 0.5:
+            self._update_streaming_card(reply_msg_id, ...)
+            last_update_time = now
+
+    # 4. 更新最终内容
+    self._update_streaming_card(..., is_final=True)
+```
+
+### 3.7.5 长连接客户端 (longpoll.py)
+
+`FeishuLongPollClient` 管理 WebSocket 连接：
+
+```python
+class FeishuLongPollClient:
+    def connect(self):
+        self._thread = threading.Thread(target=self._run_in_new_loop, daemon=True)
+        self._thread.start()
+
+    def _run_in_new_loop(self):
+        new_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(new_loop)
+
+        import lark_oapi as lark
+
+        try:
+            self._start_ws_client(lark)
+        finally:
+            new_loop.close()
+
+    def _start_ws_client(self, lark):
+        def on_message(data: lark.im.v1.P2ImMessageReceiveV1) -> None:
+            self.message_handler.handle_message(data)
+
+        event_handler = lark.EventDispatcherHandler.builder("", "") \
+            .register_p2_im_message_receive_v1(on_message) \
+            .build()
+
+        self._ws_client = lark.ws.Client(
+            self.config.app_id,
+            self.config.app_secret,
+            event_handler=event_handler
+        )
+        self._ws_client.start()
+```
+
+### 3.7.6 配置常量
+
+| 常量 | 值 | 说明 |
+|------|-----|------|
+| `UPDATE_THROTTLE_INTERVAL` | 0.5 秒 | 流式更新间隔 |
+| `MAX_PROCESSED_MESSAGES` | 1000 | 最大缓存消息数 |
+| `MESSAGE_EXPIRE_SECONDS` | 3600 秒 | 消息 ID 过期时间 |

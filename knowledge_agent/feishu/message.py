@@ -3,6 +3,7 @@ import logging
 import time
 import threading
 from typing import Optional
+from collections import OrderedDict
 
 from .config import feishu_config
 from .client import FeishuClient
@@ -10,13 +11,15 @@ from .client import FeishuClient
 logger = logging.getLogger(__name__)
 
 UPDATE_THROTTLE_INTERVAL = 0.5
+MAX_PROCESSED_MESSAGES = 1000
+MESSAGE_EXPIRE_SECONDS = 3600
 
 
 class FeishuMessageHandler:
     def __init__(self, qa_agent=None):
         self.client = FeishuClient()
         self.qa_agent = qa_agent
-        self.processed_message_ids = set()
+        self.processed_message_ids = OrderedDict()
 
     def handle_message(self, event) -> None:
         try:
@@ -28,10 +31,13 @@ class FeishuMessageHandler:
             if message_id in self.processed_message_ids:
                 logger.info(f"Duplicate message detected: {message_id}, skipping")
                 return
-            self.processed_message_ids.add(message_id)
 
-            if len(self.processed_message_ids) > 1000:
-                self.processed_message_ids = set(list(self.processed_message_ids)[-500:])
+            self._cleanup_expired_messages()
+            
+            if len(self.processed_message_ids) >= MAX_PROCESSED_MESSAGES:
+                self.processed_message_ids.popitem(last=False)
+            
+            self.processed_message_ids[message_id] = time.time()
 
             sender = event.event.sender
             sender_id = sender.sender_id.user_id if sender.sender_id else None
@@ -58,6 +64,15 @@ class FeishuMessageHandler:
 
         except Exception as e:
             logger.error(f"Error handling message: {e}", exc_info=True)
+
+    def _cleanup_expired_messages(self) -> None:
+        current_time = time.time()
+        expired_ids = [
+            msg_id for msg_id, timestamp in self.processed_message_ids.items()
+            if current_time - timestamp > MESSAGE_EXPIRE_SECONDS
+        ]
+        for msg_id in expired_ids:
+            del self.processed_message_ids[msg_id]
 
     def _handle_command(self, message_id: str, command: str) -> None:
         command = command.lower().strip()
