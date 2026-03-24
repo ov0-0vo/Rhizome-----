@@ -56,6 +56,14 @@
           <span class="nav-icon">📊</span>
           <span class="nav-text">统计</span>
         </div>
+        <div 
+          class="nav-item" 
+          :class="{ active: activeTab === 'review' }"
+          @click="selectTab('review')"
+        >
+          <span class="nav-icon">📖</span>
+          <span class="nav-text">复习</span>
+        </div>
       </nav>
 
       <div class="sidebar-footer">
@@ -73,6 +81,7 @@
         <GraphView v-else-if="activeTab === 'graph'" key="graph" />
         <SearchView v-else-if="activeTab === 'search'" key="search" />
         <StatsView v-else-if="activeTab === 'stats'" key="stats" />
+        <ReviewView v-else-if="activeTab === 'review'" key="review" />
       </transition>
     </main>
   </div>
@@ -85,6 +94,7 @@ import CatalogView from './views/CatalogView.vue'
 import GraphView from './views/GraphView.vue'
 import SearchView from './views/SearchView.vue'
 import StatsView from './views/StatsView.vue'
+import ReviewView from './views/ReviewView.vue'
 
 const activeTab = ref('chat')
 const theme = ref('light')

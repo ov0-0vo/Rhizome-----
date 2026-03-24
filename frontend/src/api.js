@@ -165,4 +165,55 @@ export const graphApi = {
   }
 }
 
+export const reviewApi = {
+  getKnowledgeForReview(catalogId = null, includeReviewed = true) {
+    return api.get('/review/knowledge', {
+      params: { catalog_id: catalogId, include_reviewed: includeReviewed }
+    })
+  },
+
+  getKnowledgeStats(knowledgeId) {
+    return api.get(`/review/knowledge/${knowledgeId}/stats`)
+  },
+
+  generateQuiz(knowledgeId, quizType = 'multiple_choice', difficulty = 'medium', count = 3) {
+    return api.post('/review/quiz/generate', {
+      knowledge_id: knowledgeId,
+      quiz_type: quizType,
+      difficulty: difficulty,
+      count: count
+    })
+  },
+
+  evaluateQuiz(quiz, userAnswer, correctAnswer, explanation = '') {
+    return api.post('/review/quiz/evaluate', {
+      quiz: quiz,
+      user_answer: userAnswer,
+      correct_answer: correctAnswer,
+      explanation: explanation
+    })
+  },
+
+  recordReview(knowledgeId, reviewMode, quizResults = [], reviewDuration = 0) {
+    return api.post('/review/record', {
+      knowledge_id: knowledgeId,
+      review_mode: reviewMode,
+      quiz_results: quizResults,
+      review_duration: reviewDuration
+    })
+  },
+
+  getCatalogStats(catalogId) {
+    return api.get(`/review/catalog/${catalogId}/stats`)
+  },
+
+  getSchedule(days = 7) {
+    return api.get('/review/schedule', { params: { days } })
+  },
+
+  getSummary() {
+    return api.get('/review/summary')
+  }
+}
+
 export default api
