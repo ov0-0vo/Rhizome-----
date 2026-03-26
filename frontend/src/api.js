@@ -112,6 +112,14 @@ export const knowledgeApi = {
     return api.get(`/knowledge/catalog/${catalogId}`)
   },
 
+  getUncategorized() {
+    return api.get('/knowledge/uncategorized')
+  },
+
+  getUncategorizedCount() {
+    return api.get('/knowledge/uncategorized/count')
+  },
+
   get(id) {
     return api.get(`/knowledge/${id}`)
   },

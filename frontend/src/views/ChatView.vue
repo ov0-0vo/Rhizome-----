@@ -93,10 +93,16 @@ const formatMarkdown = (text) => {
   return marked(text)
 }
 
-const scrollToBottom = () => {
+const scrollToBottom = (smooth = false) => {
   nextTick(() => {
     if (messagesContainer.value) {
+      if (smooth) {
+        messagesContainer.value.style.scrollBehavior = 'smooth'
+      }
       messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+      if (smooth) {
+        messagesContainer.value.style.scrollBehavior = ''
+      }
     }
   })
 }
@@ -216,7 +222,6 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  scroll-behavior: smooth;
 }
 
 .chat-messages::-webkit-scrollbar {

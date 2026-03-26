@@ -185,6 +185,32 @@ async def get_knowledge_by_catalog(catalog_id: str):
     ]
 
 
+@router.get("/uncategorized", response_model=List[KnowledgeItem])
+async def get_uncategorized_knowledge():
+    current_state = get_state()
+    all_items = current_state.knowledge_store.get_all_knowledge()
+    uncategorized = [item for item in all_items if not item.catalog_id]
+    return [
+        KnowledgeItem(
+            id=item.id,
+            question=item.question,
+            answer=item.answer,
+            keywords=item.keywords,
+            catalog_id=item.catalog_id,
+            created_at=item.created_at
+        )
+        for item in uncategorized
+    ]
+
+
+@router.get("/uncategorized/count")
+async def get_uncategorized_count():
+    current_state = get_state()
+    all_items = current_state.knowledge_store.get_all_knowledge()
+    count = sum(1 for item in all_items if not item.catalog_id)
+    return {"count": count}
+
+
 @router.delete("/{knowledge_id}")
 async def delete_knowledge(knowledge_id: str):
     current_state = get_state()
@@ -232,6 +258,7 @@ async def update_knowledge(knowledge_id: str, request: KnowledgeUpdateRequest):
     current_state = get_state()
     item = current_state.knowledge_store.update_knowledge(
         knowledge_id=knowledge_id,
+        question=request.question,
         answer=request.answer,
         keywords=request.keywords,
         catalog_id=request.catalog_id

@@ -45,6 +45,7 @@ class KnowledgeStore:
     def update_knowledge(
         self,
         knowledge_id: str,
+        question: str = None,
         answer: str = None,
         keywords: List[str] = None,
         sources: List[str] = None,
@@ -52,6 +53,8 @@ class KnowledgeStore:
     ) -> Optional[KnowledgeItem]:
         item = self.json_storage.get_item(knowledge_id)
         if item:
+            if question is not None:
+                item.question = question
             item.update(answer=answer, keywords=keywords, sources=sources)
             if catalog_id is not None:
                 item.catalog_id = catalog_id
