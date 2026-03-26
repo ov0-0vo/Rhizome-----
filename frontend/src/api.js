@@ -281,4 +281,14 @@ export const reviewApi = {
   }
 }
 
+export const configApi = {
+  get() {
+    return api.get('/config')
+  },
+
+  update(config) {
+    return api.put('/config', config)
+  }
+}
+
 export default api

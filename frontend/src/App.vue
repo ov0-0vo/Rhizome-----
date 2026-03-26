@@ -64,6 +64,14 @@
           <span class="nav-icon">📖</span>
           <span class="nav-text">复习</span>
         </div>
+        <div 
+          class="nav-item" 
+          :class="{ active: activeTab === 'config' }"
+          @click="selectTab('config')"
+        >
+          <span class="nav-icon">⚙️</span>
+          <span class="nav-text">配置</span>
+        </div>
       </nav>
 
       <div class="sidebar-footer">
@@ -82,6 +90,7 @@
         <SearchView v-else-if="activeTab === 'search'" key="search" />
         <StatsView v-else-if="activeTab === 'stats'" key="stats" />
         <ReviewView v-else-if="activeTab === 'review'" key="review" />
+        <ConfigView v-else-if="activeTab === 'config'" key="config" />
       </transition>
     </main>
   </div>
@@ -95,6 +104,7 @@ import GraphView from './views/GraphView.vue'
 import SearchView from './views/SearchView.vue'
 import StatsView from './views/StatsView.vue'
 import ReviewView from './views/ReviewView.vue'
+import ConfigView from './views/ConfigView.vue'
 
 const activeTab = ref('chat')
 const theme = ref('light')
