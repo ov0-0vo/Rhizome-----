@@ -221,6 +221,12 @@ async def delete_knowledge(knowledge_id: str):
 @router.post("", response_model=KnowledgeItem)
 async def create_knowledge(request: KnowledgeCreateRequest):
     current_state = get_state()
+    
+    if request.catalog_id is not None:
+        catalog = current_state.catalog_manager.get_catalog(request.catalog_id)
+        if not catalog:
+            raise HTTPException(status_code=400, detail=f"Catalog with id '{request.catalog_id}' not found")
+    
     item = current_state.knowledge_store.add_knowledge(
         question=request.question,
         answer=request.answer,
@@ -256,6 +262,12 @@ async def get_knowledge(knowledge_id: str):
 @router.put("/{knowledge_id}", response_model=KnowledgeItem)
 async def update_knowledge(knowledge_id: str, request: KnowledgeUpdateRequest):
     current_state = get_state()
+    
+    if request.catalog_id is not None:
+        catalog = current_state.catalog_manager.get_catalog(request.catalog_id)
+        if not catalog:
+            raise HTTPException(status_code=400, detail=f"Catalog with id '{request.catalog_id}' not found")
+    
     item = current_state.knowledge_store.update_knowledge(
         knowledge_id=knowledge_id,
         question=request.question,
