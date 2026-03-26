@@ -291,4 +291,102 @@ export const configApi = {
   }
 }
 
+export const reflectionApi = {
+  createSession(topic = '') {
+    return api.post('/reflection/session', { topic })
+  },
+
+  getSession(sessionId) {
+    return api.get(`/reflection/session/${sessionId}`)
+  },
+
+  deleteSession(sessionId) {
+    return api.delete(`/reflection/session/${sessionId}`)
+  },
+
+  chatStream(sessionId, message, topic, onChunk, onDone, onError) {
+    const body = JSON.stringify({
+      session_id: sessionId,
+      message,
+      topic
+    })
+    
+    console.log('[Reflection API] Starting stream request...')
+    
+    fetch('/api/reflection/chat/stream', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body
+    }).then(response => {
+      console.log('[Reflection API] Response received, status:', response.status)
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      
+      function read() {
+        reader.read().then(({ done, value }) => {
+          if (done) {
+            console.log('[Reflection API] Stream complete')
+            onDone && onDone()
+            return
+          }
+          
+          const text = decoder.decode(value, { stream: true })
+          console.log('[Reflection API] Raw chunk received:', text.substring(0, 100))
+          
+          buffer += text
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || ''
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6)
+              if (data === '[DONE]') {
+                console.log('[Reflection API] Received [DONE]')
+                onDone && onDone()
+                return
+              }
+              try {
+                const json = JSON.parse(data)
+                if (json.content) {
+                  console.log('[Reflection API] Content chunk:', json.content.substring(0, 50))
+                  onChunk && onChunk(json.content)
+                }
+                if (json.session_id) {
+                  console.log('[Reflection API] Session ID:', json.session_id)
+                  onChunk && onChunk({ sessionId: json.session_id })
+                }
+              } catch (e) {
+                console.error('[Reflection API] Parse error:', e, 'data:', data)
+              }
+            }
+          }
+          
+          read()
+        }).catch(err => {
+          console.error('[Reflection API] Read error:', err)
+          onError && onError(err)
+        })
+      }
+      
+      read()
+    }).catch(err => {
+      console.error('[Reflection API] Fetch error:', err)
+      onError && onError(err)
+    })
+  },
+
+  archive(sessionId, catalogId = null) {
+    return api.post('/reflection/archive', {
+      session_id: sessionId,
+      catalog_id: catalogId
+    })
+  }
+}
+
 export default api

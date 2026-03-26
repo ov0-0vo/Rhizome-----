@@ -167,7 +167,7 @@ async def generate_quiz_stream(
     except ValueError:
         difficulty = QuizDifficulty.MEDIUM
 
-    def event_generator():
+    async def event_generator():
         for event in manager.generate_quiz_stream(
             knowledge_id=request.knowledge_id,
             quiz_type=quiz_type,
@@ -182,6 +182,7 @@ async def generate_quiz_stream(
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
         }
     )
 
