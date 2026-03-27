@@ -4,8 +4,11 @@ from pydantic import BaseModel
 from typing import Optional, List
 import json
 import asyncio
+import logging
+import time
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class ChatRequest(BaseModel):
@@ -53,12 +56,18 @@ async def chat(request: ChatRequest):
 
 @router.post("/stream")
 async def chat_stream(request: ChatRequest):
+    request_start = time.time()
+    logger.info(f"[PERF] ========== API /chat/stream 请求开始 ==========")
+    logger.info(f"[PERF] 消息: {request.message[:100]}...")
+    
     from ..dependencies import get_state
     current_state = get_state()
 
     async def event_generator():
         try:
+            step_start = time.time()
             stream_iter, metadata = current_state.qa_agent.chat_with_stream(request.message)
+            logger.info(f"[PERF] API层-获取stream迭代器耗时: {time.time() - step_start:.3f}s")
 
             catalog_name = None
             if metadata.get("catalog_id"):
@@ -66,12 +75,16 @@ async def chat_stream(request: ChatRequest):
                 if catalog:
                     catalog_name = catalog.name
 
+            chunk_count = 0
             for chunk in stream_iter:
+                chunk_count += 1
                 data = {
                     "type": "chunk",
                     "content": chunk
                 }
                 yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+            logger.info(f"[PERF] API层-发送完成, chunks: {chunk_count}")
 
             final_data = {
                 "type": "done",
@@ -82,8 +95,11 @@ async def chat_stream(request: ChatRequest):
                 }
             }
             yield f"data: {json.dumps(final_data, ensure_ascii=False)}\n\n"
+            
+            logger.info(f"[PERF] ========== API /chat/stream 总耗时: {time.time() - request_start:.3f}s ==========")
 
         except Exception as e:
+            logger.error(f"[PERF] API错误: {e}")
             error_data = {
                 "type": "error",
                 "message": str(e)

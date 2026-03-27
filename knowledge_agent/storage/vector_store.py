@@ -1,8 +1,39 @@
 import os
-# 必须在导入 HuggingFaceEmbeddings 之前设置离线模式
-os.environ["HF_HUB_OFFLINE"] = "1"
-# 禁用 HF 的 symlink 警告
+import logging
+
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+
+_HF_CACHE_FOLDER = os.path.expanduser("~/.cache/huggingface/hub")
+_DEFAULT_MODEL = "BAAI/bge-small-zh-v1.5"
+
+
+def _check_model_cached(model_name: str, cache_folder: str) -> bool:
+    model_cache_path = os.path.join(
+        cache_folder, 
+        f"models--{model_name.replace('/', '--')}"
+    )
+    return os.path.exists(model_cache_path)
+
+
+def _get_embedding_model_name():
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+        return os.getenv("EMBEDDING_MODEL", _DEFAULT_MODEL)
+    except:
+        return _DEFAULT_MODEL
+
+
+_EMBEDDING_MODEL_NAME = _get_embedding_model_name()
+
+if _check_model_cached(_EMBEDDING_MODEL_NAME, _HF_CACHE_FOLDER):
+    os.environ["HF_HUB_OFFLINE"] = "1"
+    os.environ["TRANSFORMERS_OFFLINE"] = "1"
+    os.environ["HF_DATASETS_OFFLINE"] = "1"
+else:
+    os.environ["HF_HUB_OFFLINE"] = "0"
+    os.environ["TRANSFORMERS_OFFLINE"] = "0"
+    os.environ["HF_DATASETS_OFFLINE"] = "0"
 
 import chromadb
 from chromadb.config import Settings
@@ -12,10 +43,33 @@ from langchain_community.embeddings import OllamaEmbeddings
 from langchain_core.documents import Document
 from knowledge_agent.config import config
 
-# 延迟导入 HuggingFaceEmbeddings，确保环境变量已设置
+logger = logging.getLogger(__name__)
+
+_HF_EMBEDDINGS_CLASS = None
+
+
+def _init_hf_offline_mode():
+    cache_folder = os.path.expanduser("~/.cache/huggingface/hub")
+    
+    if _check_model_cached(config.embedding_model, cache_folder):
+        logger.info(f"使用本地缓存的嵌入模型: {config.embedding_model}")
+        os.environ["HF_HUB_OFFLINE"] = "1"
+        os.environ["TRANSFORMERS_OFFLINE"] = "1"
+        os.environ["HF_DATASETS_OFFLINE"] = "1"
+    else:
+        logger.info(f"本地未找到模型，正在下载: {config.embedding_model}")
+        os.environ["HF_HUB_OFFLINE"] = "0"
+        os.environ["TRANSFORMERS_OFFLINE"] = "0"
+        os.environ["HF_DATASETS_OFFLINE"] = "0"
+
+
 def _get_hf_embeddings_class():
-    from langchain_community.embeddings import HuggingFaceEmbeddings
-    return HuggingFaceEmbeddings
+    global _HF_EMBEDDINGS_CLASS
+    if _HF_EMBEDDINGS_CLASS is None:
+        _init_hf_offline_mode()
+        from langchain_community.embeddings import HuggingFaceEmbeddings
+        _HF_EMBEDDINGS_CLASS = HuggingFaceEmbeddings
+    return _HF_EMBEDDINGS_CLASS
 
 
 def create_embeddings():
@@ -23,11 +77,13 @@ def create_embeddings():
     
     if embedding_provider == "local":
         HuggingFaceEmbeddings = _get_hf_embeddings_class()
+        cache_folder = os.path.expanduser("~/.cache/huggingface/hub")
+        
         return HuggingFaceEmbeddings(
             model_name=config.embedding_model,
             model_kwargs={"device": "cpu"},
             encode_kwargs={"normalize_embeddings": True},
-            cache_folder=os.path.expanduser("~/.cache/huggingface/hub")
+            cache_folder=cache_folder
         )
     elif embedding_provider == "openai":
         return OpenAIEmbeddings(
@@ -44,17 +100,19 @@ def create_embeddings():
         return OpenAIEmbeddings(
             model=config.embedding_model,
             openai_api_key=config.embedding_api_key or config.openai_api_key,
-            api_base=config.embedding_api_base if config.embedding_api_base else f"{config.openai_api_base}/openai",
+            azure_endpoint=config.embedding_api_base if config.embedding_api_base else config.openai_api_base,
             api_version="2024-02-01",
-            deployment=config.embedding_model
+            azure_deployment=config.embedding_model
         )
     else:
         HuggingFaceEmbeddings = _get_hf_embeddings_class()
+        cache_folder = os.path.expanduser("~/.cache/huggingface/hub")
+        
         return HuggingFaceEmbeddings(
             model_name=config.embedding_model,
-            model_kwargs={"device": "gpu"},
+            model_kwargs={"device": "cpu"},
             encode_kwargs={"normalize_embeddings": True},
-            cache_folder=os.path.expanduser("~/.cache/huggingface/hub")
+            cache_folder=cache_folder
         )
 
 

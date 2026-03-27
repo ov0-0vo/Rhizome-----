@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 import json
 import logging
+import time
 
 router = APIRouter(prefix="/api/reflection", tags=["reflection"])
 
@@ -104,21 +105,28 @@ async def delete_session(session_id: str):
 
 @router.post("/chat/stream")
 async def chat_stream(request: ChatRequest):
+    request_start = time.time()
+    logger.info(f"[PERF] ========== API /reflection/chat/stream 请求开始 ==========")
+    logger.info(f"[PERF] session: {request.session_id}, 消息: {request.message[:50]}...")
+    
     manager = get_reflection_manager()
     
     async def generate():
-        logger.info(f"Starting stream for session {request.session_id}")
         try:
+            chunk_count = 0
             async for key, value in manager.chat_stream(
                 session_id=request.session_id,
                 user_message=request.message,
                 topic=request.topic
             ):
+                chunk_count += 1
                 data = f"data: {json.dumps({key: value}, ensure_ascii=False)}\n\n"
-                logger.debug(f"Yielding: {key} = {value[:50] if isinstance(value, str) else value}")
                 yield data
+            
+            logger.info(f"[PERF] API层-发送完成, chunks: {chunk_count}")
+            logger.info(f"[PERF] ========== API /reflection/chat/stream 总耗时: {time.time() - request_start:.3f}s ==========")
         except Exception as e:
-            logger.error(f"Stream error: {e}")
+            logger.error(f"[PERF] Stream error: {e}")
             yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
         yield "data: [DONE]\n\n"
     

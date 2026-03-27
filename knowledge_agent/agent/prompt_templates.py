@@ -64,7 +64,7 @@ CATALOG_MATCHING_PROMPT = PromptTemplate(
 )
 
 ANSWER_WITH_CONTEXT_PROMPT = PromptTemplate(
-    template=""""基于以下相关知识回答用户问题。
+    template="""基于以下相关知识回答用户问题。
 
 相关知识：
 {context}
@@ -73,4 +73,27 @@ ANSWER_WITH_CONTEXT_PROMPT = PromptTemplate(
 
 请根据相关知识回答问题。如果相关知识不能完全回答问题，请基于你的知识回答，但要说明这一点。""",
     input_variables=["context", "question"]
+)
+
+FAST_ANALYSIS_AND_MATCH_PROMPT = PromptTemplate(
+    template="""分析问题并匹配知识目录（一步完成）：
+
+问题：{question}
+
+已有目录：
+{catalogs}
+
+请返回以下格式的JSON：
+{{
+    "keywords": ["关键词1", "关键词2"],
+    "domain": "知识领域",
+    "matched_catalog_id": "匹配的目录ID，如果没有匹配则为null",
+    "new_category_suggestion": "如果需要新目录，建议的目录名称"
+}}
+
+重要规则：
+1. 如果问题与某个目录高度相关，返回 matched_catalog_id
+2. 如果没有匹配的目录，返回 new_category_suggestion
+3. 只返回JSON，不要其他内容""",
+    input_variables=["question", "catalogs"]
 )

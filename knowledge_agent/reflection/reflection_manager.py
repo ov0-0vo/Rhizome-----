@@ -1,5 +1,7 @@
 import uuid
 import json
+import logging
+import time
 from typing import Dict, List, Optional, AsyncIterator, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -9,6 +11,8 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from ..agent.qa_agent import create_llm, QAAgent
 from ..knowledge.knowledge_store import KnowledgeStore
 from ..knowledge.catalog_manager import CatalogManager
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -91,33 +95,45 @@ class ReflectionManager:
         user_message: str,
         topic: str = ""
     ) -> AsyncIterator[Tuple[str, str]]:
+        total_start = time.time()
+        logger.info(f"[PERF] ========== reflection chat_stream 开始 ==========")
+        logger.info(f"[PERF] session_id: {session_id}, 消息: {user_message[:50]}...")
+        
+        step_start = time.time()
         session = self.get_session(session_id)
         if not session:
             session = self.create_session(topic)
             session_id = session.id
+            logger.info(f"[PERF] 创建新session: {session_id}")
         
         if topic and not session.topic:
             session.topic = topic
         
         langchain_messages = self._build_chat_messages(session, user_message)
-        
-        print(f"[ReflectionManager] Starting LLM stream with {len(langchain_messages)} messages")
+        logger.info(f"[PERF] 构建消息完成, 消息数: {len(langchain_messages)}, 耗时: {time.time() - step_start:.3f}s")
         
         full_response = ""
         chunk_count = 0
+        stream_start = time.time()
+        first_chunk = True
+        logger.info(f"[PERF] 开始LLM流式生成...")
+        
         async for chunk in self.llm.astream(langchain_messages):
             chunk_count += 1
             if chunk.content:
+                if first_chunk:
+                    logger.info(f"[PERF] 首个chunk到达, 延迟: {time.time() - stream_start:.3f}s")
+                    first_chunk = False
                 full_response += chunk.content
-                if chunk_count <= 3 or chunk_count % 10 == 0:
-                    print(f"[ReflectionManager] Chunk {chunk_count}: {chunk.content[:50]}...")
                 yield ("content", chunk.content)
         
-        print(f"[ReflectionManager] Stream complete. Total chunks: {chunk_count}, Total length: {len(full_response)}")
+        logger.info(f"[PERF] LLM流式生成完成, chunks: {chunk_count}, 长度: {len(full_response)}, 耗时: {time.time() - stream_start:.3f}s")
         
         session.messages.append(HumanMessage(content=user_message))
         session.messages.append(AIMessage(content=full_response))
         session.updated_at = datetime.now()
+        
+        logger.info(f"[PERF] ========== reflection chat_stream 总耗时: {time.time() - total_start:.3f}s ==========")
         
         yield ("session_id", session_id)
     
