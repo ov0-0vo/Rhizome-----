@@ -30,11 +30,12 @@
           >
             <div class="message-avatar">
               <span v-if="msg.role === 'user'">👤</span>
+              <span v-else-if="msg.role === 'summary'">📝</span>
               <span v-else>🤖</span>
             </div>
             <div class="message-content">
               <div class="message-header">
-                <span class="message-role">{{ msg.role === 'user' ? '你' : 'AI 助手' }}</span>
+                <span class="message-role">{{ getMessageRole(msg.role) }}</span>
               </div>
               <div v-if="msg.role === 'assistant' && !msg.content && loading" class="typing-indicator">
                 <span></span>
@@ -54,11 +55,12 @@
               placeholder="描述你对某个知识的理解..."
               rows="1"
               ref="inputRef"
+              :disabled="archiving"
             ></textarea>
             <button 
               class="send-btn" 
               @click="sendMessage"
-              :disabled="!userInput.trim() || loading"
+              :disabled="!userInput.trim() || loading || archiving"
             >
               发送
             </button>
@@ -68,20 +70,15 @@
 
       <div class="sidebar" v-if="messages.length > 0">
         <div class="sidebar-section">
-          <h4>📚 归档到目录</h4>
-          <select v-model="selectedCatalogId" class="catalog-select">
-            <option :value="null">未分类</option>
-            <option v-for="cat in catalogs" :key="cat.id" :value="cat.id">
-              {{ cat.name }}
-            </option>
-          </select>
+          <h4>📦 归档知识</h4>
+          <p class="archive-hint">点击归档将自动总结对话并分类到合适的知识目录</p>
           <button 
             class="btn btn-primary archive-btn"
             @click="archiveSession"
-            :disabled="archiving"
+            :disabled="archiving || !sessionId"
           >
             <span class="btn-icon">📦</span>
-            {{ archiving ? '归档中...' : '总结归档' }}
+            {{ archiving ? '总结中...' : '总结归档' }}
           </button>
         </div>
 
@@ -98,6 +95,10 @@
         <div class="sidebar-section" v-if="archiveResult">
           <h4>✅ 已归档</h4>
           <div class="archive-result">
+            <div class="result-item" v-if="archiveResult.catalog_name">
+              <strong>目录：</strong>
+              <p>{{ archiveResult.catalog_name }}</p>
+            </div>
             <div class="result-item">
               <strong>问题：</strong>
               <p>{{ archiveResult.question }}</p>
@@ -114,13 +115,22 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick, computed } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import { marked } from 'marked'
-import { reflectionApi, catalogApi } from '../api'
+import { reflectionApi } from '../api'
 
 const formatMarkdown = (text) => {
   if (!text) return ''
   return marked(text)
+}
+
+const getMessageRole = (role) => {
+  const roleMap = {
+    'user': '你',
+    'assistant': 'AI 助手',
+    'summary': '知识总结'
+  }
+  return roleMap[role] || 'AI 助手'
 }
 
 const messages = ref([])
@@ -128,8 +138,6 @@ const userInput = ref('')
 const loading = ref(false)
 const archiving = ref(false)
 const sessionId = ref(null)
-const catalogs = ref([])
-const selectedCatalogId = ref(null)
 const archiveResult = ref(null)
 const messagesContainer = ref(null)
 const inputRef = ref(null)
@@ -138,15 +146,6 @@ const scrollToBottom = async () => {
   await nextTick()
   if (messagesContainer.value) {
     messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
-  }
-}
-
-const loadCatalogs = async () => {
-  try {
-    const response = await catalogApi.getAll()
-    catalogs.value = response.data
-  } catch (error) {
-    console.error('Failed to load catalogs:', error)
   }
 }
 
@@ -159,7 +158,7 @@ const startNewSession = () => {
 
 const sendMessage = async () => {
   const message = userInput.value.trim()
-  if (!message || loading.value) return
+  if (!message || loading.value || archiving.value) return
 
   messages.value.push({
     role: 'user',
@@ -205,31 +204,41 @@ const archiveSession = async () => {
   if (!sessionId.value || archiving.value) return
   
   archiving.value = true
+  archiveResult.value = null
   
-  try {
-    const response = await reflectionApi.archive(
-      sessionId.value,
-      selectedCatalogId.value
-    )
-    
-    archiveResult.value = response.data
-    
-    messages.value.push({
-      role: 'assistant',
-      content: `✅ 已将本次对话总结归档到知识目录。\n\n**问题：** ${response.data.question}\n\n知识条目已保存，你可以在知识目录中查看和编辑。`
-    })
-    
-    await scrollToBottom()
-  } catch (error) {
-    console.error('Archive error:', error)
-    alert('归档失败：' + (error.response?.data?.detail || error.message))
-  } finally {
-    archiving.value = false
-  }
+  const summaryMessageIndex = messages.value.length
+  messages.value.push({
+    role: 'summary',
+    content: ''
+  })
+  
+  await scrollToBottom()
+  
+  reflectionApi.archiveStream(
+    sessionId.value,
+    (chunk) => {
+      if (typeof chunk === 'string') {
+        messages.value[summaryMessageIndex].content += chunk
+        scrollToBottom()
+      } else if (typeof chunk === 'object' && chunk.done) {
+        archiveResult.value = chunk.done
+        messages.value[summaryMessageIndex].content += `\n\n---\n\n✅ **归档完成**\n\n**目录：** ${chunk.done.catalog_name || '未分类'}\n\n**问题：** ${chunk.done.question}\n\n知识条目已保存，你可以在知识目录中查看和编辑。`
+        scrollToBottom()
+      }
+    },
+    () => {
+      archiving.value = false
+      sessionId.value = null
+    },
+    (error) => {
+      console.error('Archive error:', error)
+      messages.value[summaryMessageIndex].content = '❌ 归档失败：' + error
+      archiving.value = false
+    }
+  )
 }
 
 onMounted(() => {
-  loadCatalogs()
 })
 </script>
 
@@ -329,7 +338,8 @@ onMounted(() => {
   flex-direction: row-reverse;
 }
 
-.message.assistant {
+.message.assistant,
+.message.summary {
   align-self: flex-start;
 }
 
@@ -347,6 +357,10 @@ onMounted(() => {
 
 .message.user .message-avatar {
   background: var(--primary-gradient);
+}
+
+.message.summary .message-avatar {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
 }
 
 .message-content {
@@ -379,6 +393,11 @@ onMounted(() => {
   color: white;
   border-radius: var(--radius-lg);
   border-top-right-radius: var(--radius-sm);
+}
+
+.message.summary .message-text {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.1) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.3);
 }
 
 .message.user .message-text :deep(code) {
@@ -449,6 +468,11 @@ onMounted(() => {
   color: var(--text-muted);
 }
 
+.input-wrapper textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .send-btn {
   padding: 12px 24px;
   background: var(--primary-color);
@@ -491,20 +515,11 @@ onMounted(() => {
   margin-bottom: 12px;
 }
 
-.catalog-select {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  font-size: 14px;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
+.archive-hint {
+  font-size: 13px;
+  color: var(--text-secondary);
   margin-bottom: 12px;
-}
-
-.catalog-select:focus {
-  outline: none;
-  border-color: var(--primary-color);
+  line-height: 1.5;
 }
 
 .archive-btn {

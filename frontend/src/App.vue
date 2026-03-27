@@ -22,7 +22,15 @@
           @click="selectTab('chat')"
         >
           <span class="nav-icon">💬</span>
-          <span class="nav-text">对话</span>
+          <span class="nav-text">简单问答</span>
+        </div>
+        <div 
+          class="nav-item" 
+          :class="{ active: activeTab === 'reflection' }"
+          @click="selectTab('reflection')"
+        >
+          <span class="nav-icon">🧠</span>
+          <span class="nav-text">理解反思</span>
         </div>
         <div 
           class="nav-item" 
@@ -56,6 +64,7 @@
           <span class="nav-icon">📊</span>
           <span class="nav-text">统计</span>
         </div>
+        
         <div 
           class="nav-item" 
           :class="{ active: activeTab === 'review' }"
@@ -64,14 +73,7 @@
           <span class="nav-icon">📖</span>
           <span class="nav-text">复习</span>
         </div>
-        <div 
-          class="nav-item" 
-          :class="{ active: activeTab === 'reflection' }"
-          @click="selectTab('reflection')"
-        >
-          <span class="nav-icon">🧠</span>
-          <span class="nav-text">反思</span>
-        </div>
+        
         <div 
           class="nav-item" 
           :class="{ active: activeTab === 'config' }"

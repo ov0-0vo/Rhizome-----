@@ -386,6 +386,80 @@ export const reflectionApi = {
       session_id: sessionId,
       catalog_id: catalogId
     })
+  },
+
+  archiveStream(sessionId, onSummary, onDone, onError) {
+    console.log('[Reflection API] Starting archive stream request...')
+    
+    fetch('/api/reflection/archive/stream', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        session_id: sessionId
+      })
+    }).then(response => {
+      console.log('[Reflection API] Archive stream response, status:', response.status)
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      
+      function read() {
+        reader.read().then(({ done, value }) => {
+          if (done) {
+            console.log('[Reflection API] Archive stream complete')
+            onDone && onDone()
+            return
+          }
+          
+          const text = decoder.decode(value, { stream: true })
+          
+          buffer += text
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || ''
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6)
+              if (data === '[DONE]') {
+                console.log('[Reflection API] Archive received [DONE]')
+                onDone && onDone()
+                return
+              }
+              try {
+                const json = JSON.parse(data)
+                if (json.summary) {
+                  onSummary && onSummary(json.summary)
+                }
+                if (json.done) {
+                  const result = JSON.parse(json.done)
+                  onSummary && onSummary({ done: result })
+                }
+                if (json.error) {
+                  onError && onError(json.error)
+                }
+              } catch (e) {
+                console.error('[Reflection API] Archive parse error:', e, 'data:', data)
+              }
+            }
+          }
+          
+          read()
+        }).catch(err => {
+          console.error('[Reflection API] Archive read error:', err)
+          onError && onError(err)
+        })
+      }
+      
+      read()
+    }).catch(err => {
+      console.error('[Reflection API] Archive fetch error:', err)
+      onError && onError(err)
+    })
   }
 }
 
