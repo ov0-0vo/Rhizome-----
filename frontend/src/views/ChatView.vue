@@ -315,6 +315,19 @@ onMounted(() => {
   border-radius: var(--radius-lg);
   border-top-left-radius: var(--radius-sm);
   line-height: 1.6;
+  color: var(--text-primary);
+}
+
+.message-text :deep(p) {
+  color: var(--text-primary);
+}
+
+.message-text :deep(li) {
+  color: var(--text-primary);
+}
+
+.message-text :deep(span) {
+  color: var(--text-primary);
 }
 
 .message.user .message-text {
@@ -332,6 +345,12 @@ onMounted(() => {
 .message.user .message-text :deep(pre) {
   background: rgba(0, 0, 0, 0.1);
   border-color: rgba(255, 255, 255, 0.1);
+}
+
+.message.user .message-text :deep(p),
+.message.user .message-text :deep(li),
+.message.user .message-text :deep(span) {
+  color: white;
 }
 
 .catalog-tag {

@@ -76,20 +76,20 @@
     --primary-gradient: linear-gradient(135deg, #73D13D 0%, #36CFC9 100%);
     
     --bg-primary: #0D1A0A;
-    --bg-secondary: #142110;
-    --bg-card: #1A2D16;
-    --bg-hover: #243920;
+    --bg-secondary: #1A2D16;
+    --bg-card: #243920;
+    --bg-hover: #2D4A28;
     
-    --text-primary: #E8F5E0;
-    --text-secondary: #A8D5A0;
-    --text-muted: #6BAF62;
+    --text-primary: #F0F7EC;
+    --text-secondary: #C4DFB8;
+    --text-muted: #8AB878;
     
-    --border-color: #2D4A28;
-    --border-light: #1F381A;
+    --border-color: #3D5A38;
+    --border-light: #2D4A28;
     
-    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2);
-    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
-    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
     --shadow-hover: 0 8px 24px rgba(115, 209, 61, 0.2);
   }
 }
@@ -286,6 +286,7 @@ textarea.input {
 
 .markdown-content {
   line-height: 1.8;
+  color: var(--text-primary);
 }
 
 .markdown-content h1,
@@ -303,6 +304,7 @@ textarea.input {
 
 .markdown-content p {
   margin-bottom: 1em;
+  color: var(--text-primary);
 }
 
 .markdown-content ul,
@@ -313,6 +315,7 @@ textarea.input {
 
 .markdown-content li {
   margin-bottom: 0.5em;
+  color: var(--text-primary);
 }
 
 .markdown-content code {
