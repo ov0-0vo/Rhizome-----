@@ -14,7 +14,7 @@ class Config:
     openai_model: str = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
     
     embedding_provider: str = os.getenv("EMBEDDING_PROVIDER", "local")
-    embedding_model: str = os.getenv("EMBEDDING_MODEL", "BAAI/bge-large-zh-v1.5")
+    embedding_model: str = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-zh-v1.5")
     embedding_api_key: str = os.getenv("EMBEDDING_API_KEY", "")
     embedding_api_base: str = os.getenv("EMBEDDING_API_BASE", "")
     
