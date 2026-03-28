@@ -291,14 +291,25 @@ class QAAgent:
             ]
             return self.llm_non_streaming.invoke(messages).content
 
+    def _fast_match_catalog_only(self, question: str) -> Tuple[Optional[str], List[str]]:
+        keywords = self._extract_keywords_simple(question)
+        
+        catalogs = self._get_catalogs_summary_cached()
+        if not catalogs:
+            return None, keywords
+        
+        matched_id = self._match_catalog_fast(keywords)
+        return matched_id, keywords
+
     def chat_with_stream(self, question: str) -> Tuple[Iterator[str], Dict[str, Any]]:
         total_start = time.time()
         logger.info(f"[PERF] ========== chat_with_stream 开始 ==========")
         logger.info(f"[PERF] 问题: {question[:100]}...")
         
         step_start = time.time()
-        catalog_id, keywords, match_reason = self._fast_analyze_and_match(question)
-        logger.info(f"[PERF] 步骤1-目录匹配完成, 耗时: {time.time() - step_start:.3f}s, 匹配结果: {match_reason}")
+        catalog_id, keywords = self._fast_match_catalog_only(question)
+        match_reason = "关键词快速匹配" if catalog_id else "待后台匹配"
+        logger.info(f"[PERF] 步骤1-快速目录匹配完成, 耗时: {time.time() - step_start:.3f}s, 结果: {match_reason}")
         
         step_start = time.time()
         context_knowledge = self.retrieve_knowledge(question, catalog_id)
@@ -327,8 +338,8 @@ class QAAgent:
             logger.info(f"[PERF] ========== chat_with_stream 总耗时: {time.time() - total_start:.3f}s ==========")
 
             threading.Thread(
-                target=self._background_store,
-                args=(question, full_answer, catalog_id, match_reason, keywords),
+                target=self._background_store_with_match,
+                args=(question, full_answer, catalog_id, keywords),
                 daemon=True
             ).start()
 
@@ -374,6 +385,51 @@ class QAAgent:
                 self.catalog_manager.add_knowledge_to_catalog(catalog_id, knowledge_item.id)
         except Exception as e:
             print(f"Background store error: {e}")
+
+    def _background_store_with_match(
+        self,
+        question: str,
+        answer: str,
+        quick_catalog_id: Optional[str],
+        keywords: List[str]
+    ):
+        try:
+            bg_start = time.time()
+            logger.info(f"[PERF] 后台任务开始: 智能目录匹配和存储...")
+            
+            if quick_catalog_id:
+                final_catalog_id = quick_catalog_id
+                match_reason = "关键词快速匹配"
+            else:
+                try:
+                    final_catalog_id, _, match_reason = self._fast_analyze_and_match(question)
+                    logger.info(f"[PERF] 后台LLM目录匹配完成, 耗时: {time.time() - bg_start:.3f}s, 结果: {match_reason}")
+                except Exception as e:
+                    logger.warning(f"[PERF] 后台目录匹配失败: {e}, 使用默认目录")
+                    catalog_name = self._get_catalog_name_from_domain("general")
+                    new_catalog = self.catalog_manager.create_catalog(
+                        name=catalog_name,
+                        keywords=keywords
+                    )
+                    final_catalog_id = new_catalog.id
+                    match_reason = "默认目录"
+            
+            knowledge_metadata = self.extract_knowledge_metadata(question, answer)
+            all_keywords = list(set(keywords + knowledge_metadata.get("keywords", [])))
+
+            knowledge_item = self.knowledge_store.add_knowledge(
+                question=question,
+                answer=answer,
+                catalog_id=final_catalog_id,
+                keywords=all_keywords
+            )
+
+            if final_catalog_id:
+                self.catalog_manager.add_knowledge_to_catalog(final_catalog_id, knowledge_item.id)
+            
+            logger.info(f"[PERF] 后台任务完成, 总耗时: {time.time() - bg_start:.3f}s")
+        except Exception as e:
+            logger.error(f"Background store error: {e}")
 
     def get_knowledge_tree(self) -> Dict[str, Any]:
         return self.catalog_manager.get_catalog_tree()

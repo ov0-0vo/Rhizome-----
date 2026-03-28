@@ -17,10 +17,11 @@ sdist/
 var/
 wheels/
 *.egg-info/
-.installed.cfg
+.installed.cfg/
 *.egg
 .env
 data/
+models/
 *.log
 .ruff_cache/
 .pytest_cache/

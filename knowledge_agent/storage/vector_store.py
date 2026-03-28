@@ -3,7 +3,8 @@ import logging
 
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 
-_HF_CACHE_FOLDER = os.path.expanduser("~/.cache/huggingface/hub")
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_HF_CACHE_FOLDER = os.path.join(_PROJECT_ROOT, "models", "embedding")
 _DEFAULT_MODEL = "BAAI/bge-small-zh-v1.5"
 
 
@@ -49,9 +50,7 @@ _HF_EMBEDDINGS_CLASS = None
 
 
 def _init_hf_offline_mode():
-    cache_folder = os.path.expanduser("~/.cache/huggingface/hub")
-    
-    if _check_model_cached(config.embedding_model, cache_folder):
+    if _check_model_cached(config.embedding_model, _HF_CACHE_FOLDER):
         logger.info(f"使用本地缓存的嵌入模型: {config.embedding_model}")
         os.environ["HF_HUB_OFFLINE"] = "1"
         os.environ["TRANSFORMERS_OFFLINE"] = "1"
@@ -77,13 +76,12 @@ def create_embeddings():
     
     if embedding_provider == "local":
         HuggingFaceEmbeddings = _get_hf_embeddings_class()
-        cache_folder = os.path.expanduser("~/.cache/huggingface/hub")
         
         return HuggingFaceEmbeddings(
             model_name=config.embedding_model,
             model_kwargs={"device": "cpu"},
             encode_kwargs={"normalize_embeddings": True},
-            cache_folder=cache_folder
+            cache_folder=_HF_CACHE_FOLDER
         )
     elif embedding_provider == "openai":
         return OpenAIEmbeddings(
@@ -106,13 +104,12 @@ def create_embeddings():
         )
     else:
         HuggingFaceEmbeddings = _get_hf_embeddings_class()
-        cache_folder = os.path.expanduser("~/.cache/huggingface/hub")
         
         return HuggingFaceEmbeddings(
             model_name=config.embedding_model,
             model_kwargs={"device": "cpu"},
             encode_kwargs={"normalize_embeddings": True},
-            cache_folder=cache_folder
+            cache_folder=_HF_CACHE_FOLDER
         )
 
 
