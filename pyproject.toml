@@ -21,6 +21,9 @@ dependencies = [
     "httpx>=0.25.0",
     "websockets>=12.0",
     "lark-oapi>=1.2.0",
+    "numpy>=1.24.0",
+    "tavily-python>=0.3.0",
+    "langchain-tavily>=0.1.0",
 ]
 
 [project.optional-dependencies]

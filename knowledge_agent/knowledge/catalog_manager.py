@@ -144,3 +144,50 @@ class CatalogManager:
             }
             for c in catalogs
         ]
+
+    def sync_knowledge_items(self, all_knowledge_items: List[Any]) -> Dict[str, Any]:
+        valid_knowledge_ids = {item.id for item in all_knowledge_items}
+        
+        knowledge_by_catalog: Dict[str, List[str]] = {}
+        for item in all_knowledge_items:
+            if item.catalog_id:
+                if item.catalog_id not in knowledge_by_catalog:
+                    knowledge_by_catalog[item.catalog_id] = []
+                knowledge_by_catalog[item.catalog_id].append(item.id)
+        
+        catalogs = self.get_all_catalogs()
+        stats = {
+            "catalogs_updated": 0,
+            "items_added": 0,
+            "items_removed": 0,
+            "details": []
+        }
+        
+        for catalog in catalogs:
+            old_count = len(catalog.knowledge_items)
+            
+            valid_items = [kid for kid in catalog.knowledge_items if kid in valid_knowledge_ids]
+            orphaned = old_count - len(valid_items)
+            
+            expected_items = knowledge_by_catalog.get(catalog.id, [])
+            new_items = [kid for kid in expected_items if kid not in valid_items]
+            
+            catalog.knowledge_items = list(set(valid_items + expected_items))
+            new_count = len(catalog.knowledge_items)
+            
+            if new_count != old_count:
+                self.storage.update_catalog(catalog)
+                stats["catalogs_updated"] += 1
+                stats["items_added"] += len(new_items)
+                stats["items_removed"] += orphaned
+                
+                stats["details"].append({
+                    "catalog_id": catalog.id,
+                    "catalog_name": catalog.name,
+                    "old_count": old_count,
+                    "new_count": new_count,
+                    "added": len(new_items),
+                    "removed": orphaned
+                })
+        
+        return stats

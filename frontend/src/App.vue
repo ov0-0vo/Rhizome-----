@@ -67,6 +67,15 @@
         
         <div 
           class="nav-item" 
+          :class="{ active: activeTab === 'analysis' }"
+          @click="selectTab('analysis')"
+        >
+          <span class="nav-icon">📈</span>
+          <span class="nav-text">分析</span>
+        </div>
+        
+        <div 
+          class="nav-item" 
           :class="{ active: activeTab === 'review' }"
           @click="selectTab('review')"
         >
@@ -99,6 +108,7 @@
         <GraphView v-else-if="activeTab === 'graph'" key="graph" />
         <SearchView v-else-if="activeTab === 'search'" key="search" />
         <StatsView v-else-if="activeTab === 'stats'" key="stats" />
+        <AnalysisView v-else-if="activeTab === 'analysis'" key="analysis" />
         <ReviewView v-else-if="activeTab === 'review'" key="review" />
         <ReflectionView v-else-if="activeTab === 'reflection'" key="reflection" />
         <ConfigView v-else-if="activeTab === 'config'" key="config" />
@@ -117,6 +127,7 @@ import StatsView from './views/StatsView.vue'
 import ReviewView from './views/ReviewView.vue'
 import ReflectionView from './views/ReflectionView.vue'
 import ConfigView from './views/ConfigView.vue'
+import AnalysisView from './views/AnalysisView.vue'
 
 const activeTab = ref('chat')
 const theme = ref('light')

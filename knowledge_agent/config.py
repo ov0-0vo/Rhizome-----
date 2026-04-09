@@ -18,6 +18,9 @@ class Config:
     embedding_api_key: str = os.getenv("EMBEDDING_API_KEY", "")
     embedding_api_base: str = os.getenv("EMBEDDING_API_BASE", "")
     
+    tavily_api_key: str = os.getenv("TAVILY_API_KEY", "")
+    web_search_enabled: bool = os.getenv("WEB_SEARCH_ENABLED", "false").lower() == "true"
+    
     data_dir: str = "data"
     catalog_file: str = "data/catalog.json"
     vector_store_dir: str = "data/vector_store"

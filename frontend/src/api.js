@@ -291,6 +291,104 @@ export const configApi = {
   }
 }
 
+export const analysisApi = {
+  getDistribution(threshold = 0.85) {
+    return api.get('/analysis/distribution', { params: { threshold } })
+  },
+
+  getDistributionChart() {
+    return api.get('/analysis/distribution/chart')
+  },
+
+  getSimilarPairs(threshold = 0.85, limit = 50) {
+    return api.get('/analysis/similar-pairs', { params: { threshold, limit } })
+  },
+
+  getDuplicates(threshold = 0.90) {
+    return api.get('/analysis/duplicates', { params: { threshold } })
+  },
+
+  getCatalogDistribution() {
+    return api.get('/analysis/catalog-distribution')
+  },
+
+  getReorganizationSuggestions(maxItems = 20) {
+    return api.get('/analysis/reorganization-suggestions', { params: { max_items: maxItems } })
+  },
+
+  getMergeSuggestions(threshold = 0.90) {
+    return api.get('/analysis/merge-suggestions', { params: { threshold } })
+  },
+
+  mergeKnowledge(primaryId, duplicateIds, mergedQuestion = null, mergedAnswer = null) {
+    return api.post('/analysis/merge', {
+      primary_id: primaryId,
+      duplicate_ids: duplicateIds,
+      merged_question: mergedQuestion,
+      merged_answer: mergedAnswer
+    })
+  },
+
+  generateMergedContent(primaryId, duplicateIds) {
+    return api.post('/analysis/generate-merged-content', {
+      primary_id: primaryId,
+      duplicate_ids: duplicateIds
+    })
+  },
+
+  getCatalogSplitSuggestion(catalogId, maxItems = 20) {
+    return api.get(`/analysis/catalog-split-suggestion/${catalogId}`, { params: { max_items: maxItems } })
+  },
+
+  splitCatalog(catalogId, subCatalogConfigs) {
+    return api.post('/analysis/split-catalog', {
+      catalog_id: catalogId,
+      sub_catalog_configs: subCatalogConfigs
+    })
+  },
+
+  autoOrganize(mergeThreshold = 0.90, maxItemsPerCatalog = 20) {
+    return api.post('/analysis/auto-organize', {
+      merge_threshold: mergeThreshold,
+      max_items_per_catalog: maxItemsPerCatalog
+    })
+  },
+
+  getOrganizationSummary() {
+    return api.get('/analysis/organization-summary')
+  },
+
+  refreshCache() {
+    return api.post('/analysis/refresh-cache')
+  },
+
+  getKnowledgeSpace() {
+    return api.get('/analysis/knowledge-space')
+  },
+
+  getSimilarityHeatmap(maxItems = 50, clusterByCatalog = true) {
+    return api.get('/analysis/similarity-heatmap', { 
+      params: { max_items: maxItems, cluster_by_catalog: clusterByCatalog } 
+    })
+  },
+
+  getSimilarityNetwork(threshold = 0.7, maxNodes = 100) {
+    return api.get('/analysis/similarity-network', { 
+      params: { threshold, max_nodes: maxNodes } 
+    })
+  },
+
+  getKnowledgeClusters(nClusters = null) {
+    return api.get('/analysis/knowledge-clusters', { 
+      params: { n_clusters: nClusters } 
+    })
+  },
+
+  syncCatalogCounts() {
+    return api.post('/analysis/sync-catalog-counts')
+  }
+}
+
 export const reflectionApi = {
   createSession(topic = '') {
     return api.post('/reflection/session', { topic })
