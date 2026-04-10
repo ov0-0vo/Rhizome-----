@@ -59,13 +59,15 @@ class ReflectionManager:
     def __init__(
         self,
         knowledge_store: KnowledgeStore = None,
-        catalog_manager: CatalogManager = None
+        catalog_manager: CatalogManager = None,
+        qa_agent: QAAgent = None
     ):
         self.sessions: Dict[str, ReflectionSession] = {}
         self.llm = create_llm(streaming=True)
         self.llm_non_streaming = create_llm(streaming=False)
         self.knowledge_store = knowledge_store or KnowledgeStore()
         self.catalog_manager = catalog_manager or CatalogManager()
+        self._qa_agent = qa_agent
     
     def create_session(self, topic: str = "") -> ReflectionSession:
         session_id = str(uuid.uuid4())
@@ -174,7 +176,7 @@ class ReflectionManager:
             answer = '\n'.join(current_content).strip()
         
         if not question:
-            question = session.topic if 'session' in dir() else "知识总结"
+            question = "知识总结"
         if not answer:
             answer = summary_text
         
@@ -191,7 +193,7 @@ class ReflectionManager:
         
         summary_messages = self._build_summary_messages(session)
         
-        print(f"[ReflectionManager] Starting summary stream with {len(summary_messages)} messages")
+        logger.info(f"Starting summary stream with {len(summary_messages)} messages")
         
         full_summary = ""
         chunk_count = 0
@@ -201,20 +203,19 @@ class ReflectionManager:
                 full_summary += chunk.content
                 yield ("summary", chunk.content)
         
-        print(f"[ReflectionManager] Summary complete. Total length: {len(full_summary)}")
+        logger.info(f"Summary complete. Total length: {len(full_summary)}")
         
         question, answer = self._parse_summary(full_summary)
         
-        qa_agent = QAAgent(
+        qa_agent = self._qa_agent or QAAgent(
             catalog_manager=self.catalog_manager,
             knowledge_store=self.knowledge_store
         )
         
-        analysis = qa_agent.analyze_question(question)
+        catalog_id, keywords, match_reason = qa_agent._fast_analyze_and_match(question)
         knowledge_metadata = qa_agent.extract_knowledge_metadata(question, answer)
-        keywords = list(set(analysis.get("keywords", []) + knowledge_metadata.get("keywords", [])))
-        
-        catalog_id, match_reason = qa_agent.match_catalog(question)
+        if knowledge_metadata and knowledge_metadata.get("keywords"):
+            keywords = list(set(keywords + knowledge_metadata["keywords"]))
         
         item = self.knowledge_store.add_knowledge(
             question=question,
@@ -259,17 +260,18 @@ class ReflectionManager:
         
         question, answer = self._parse_summary(summary_text)
         
-        qa_agent = QAAgent(
+        qa_agent = self._qa_agent or QAAgent(
             catalog_manager=self.catalog_manager,
             knowledge_store=self.knowledge_store
         )
         
-        analysis = qa_agent.analyze_question(question)
+        matched_catalog_id, keywords, match_reason = qa_agent._fast_analyze_and_match(question)
         knowledge_metadata = qa_agent.extract_knowledge_metadata(question, answer)
-        keywords = list(set(analysis.get("keywords", []) + knowledge_metadata.get("keywords", [])))
+        if knowledge_metadata and knowledge_metadata.get("keywords"):
+            keywords = list(set(keywords + knowledge_metadata["keywords"]))
         
         if catalog_id is None:
-            catalog_id, match_reason = qa_agent.match_catalog(question)
+            catalog_id = matched_catalog_id
         
         item = self.knowledge_store.add_knowledge(
             question=question,

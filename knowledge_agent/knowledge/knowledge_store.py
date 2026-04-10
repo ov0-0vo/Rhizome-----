@@ -80,15 +80,19 @@ class KnowledgeStore:
         for vr in vector_results:
             item = self.json_storage.get_item(vr["id"])
             if item:
+                similarity = max(0.0, 1 - vr["distance"] / 2)
                 results.append({
                     "id": item.id,
                     "question": item.question,
                     "answer": item.answer,
                     "keywords": item.keywords,
                     "catalog_id": item.catalog_id,
-                    "similarity": 1 - vr["distance"],
+                    "similarity": similarity,
                     "created_at": item.created_at
                 })
+            else:
+                import logging
+                logging.getLogger(__name__).warning(f"向量库中存在但JSON中缺失的知识条目: {vr['id']}")
         
         return results
 
@@ -104,13 +108,14 @@ class KnowledgeStore:
         for vr in vector_results:
             item = self.json_storage.get_item(vr["id"])
             if item:
+                similarity = max(0.0, 1 - vr["distance"] / 2)
                 results.append({
                     "id": item.id,
                     "question": item.question,
                     "answer": item.answer,
                     "keywords": item.keywords,
                     "catalog_id": item.catalog_id,
-                    "similarity": 1 - vr["distance"],
+                    "similarity": similarity,
                     "created_at": item.created_at
                 })
         

@@ -118,16 +118,17 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import ChatView from './views/ChatView.vue'
-import CatalogView from './views/CatalogView.vue'
-import GraphView from './views/GraphView.vue'
-import SearchView from './views/SearchView.vue'
-import StatsView from './views/StatsView.vue'
-import ReviewView from './views/ReviewView.vue'
-import ReflectionView from './views/ReflectionView.vue'
-import ConfigView from './views/ConfigView.vue'
-import AnalysisView from './views/AnalysisView.vue'
+import { ref, onMounted, defineAsyncComponent } from 'vue'
+
+const ChatView = defineAsyncComponent(() => import('./views/ChatView.vue'))
+const CatalogView = defineAsyncComponent(() => import('./views/CatalogView.vue'))
+const GraphView = defineAsyncComponent(() => import('./views/GraphView.vue'))
+const SearchView = defineAsyncComponent(() => import('./views/SearchView.vue'))
+const StatsView = defineAsyncComponent(() => import('./views/StatsView.vue'))
+const ReviewView = defineAsyncComponent(() => import('./views/ReviewView.vue'))
+const ReflectionView = defineAsyncComponent(() => import('./views/ReflectionView.vue'))
+const ConfigView = defineAsyncComponent(() => import('./views/ConfigView.vue'))
+const AnalysisView = defineAsyncComponent(() => import('./views/AnalysisView.vue'))
 
 const activeTab = ref('chat')
 const theme = ref('light')

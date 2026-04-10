@@ -21,7 +21,7 @@ def _get_embedding_model_name():
         from dotenv import load_dotenv
         load_dotenv()
         return os.getenv("EMBEDDING_MODEL", _DEFAULT_MODEL)
-    except:
+    except Exception:
         return _DEFAULT_MODEL
 
 
@@ -126,7 +126,7 @@ class VectorStoreManager:
     def _get_or_create_collection(self):
         try:
             return self.client.get_collection(name="knowledge")
-        except:
+        except (ValueError, KeyError, TypeError):
             return self.client.create_collection(
                 name="knowledge",
                 metadata={"hnsw:space": "cosine"}
@@ -150,13 +150,13 @@ class VectorStoreManager:
                 documents=[doc],
                 metadatas=[{"catalog_id": catalog_id or "unknown", "question": question}]
             )
-        except Exception:
+        except (ValueError, KeyError, TypeError):
             self.add_knowledge(knowledge_id, question, answer, catalog_id)
 
     def delete_knowledge(self, knowledge_id: str):
         try:
             self.collection.delete(ids=[knowledge_id])
-        except:
+        except (ValueError, KeyError, TypeError):
             pass
 
     def search(
@@ -179,7 +179,7 @@ class VectorStoreManager:
                     query_texts=[query],
                     n_results=n_results
                 )
-        except:
+        except (ValueError, KeyError, TypeError):
             return []
 
         parsed_results = []
@@ -203,16 +203,43 @@ class VectorStoreManager:
         if not catalog_ids:
             return self.search(query, n_results)
         
-        results = []
-        for cat_id in catalog_ids:
-            cat_results = self.search(query, n_results, catalog_id=cat_id)
-            results.extend(cat_results)
+        if len(catalog_ids) == 1:
+            return self.search(query, n_results, catalog_id=catalog_ids[0])
         
-        results.sort(key=lambda x: x["distance"])
-        return results[:n_results]
+        try:
+            where_filter = {"$or": [{"catalog_id": cid} for cid in catalog_ids]}
+            query_embedding = self.embeddings.embed_query(query)
+            
+            results = self.collection.query(
+                query_embeddings=[query_embedding],
+                n_results=n_results,
+                where=where_filter,
+                include=["documents", "distances", "metadatas"]
+            )
+            
+            parsed_results = []
+            if results and results["ids"] and results["ids"][0]:
+                for i, doc_id in enumerate(results["ids"][0]):
+                    parsed_results.append({
+                        "id": doc_id,
+                        "document": results["documents"][0][i] if results["documents"] else "",
+                        "distance": results["distances"][0][i] if "distances" in results else 0,
+                        "metadata": results["metadatas"][0][i] if results["metadatas"] else {}
+                    })
+            
+            return parsed_results
+        except (ValueError, KeyError, TypeError) as e:
+            logger.warning(f"批量目录搜索失败，回退到逐目录搜索: {e}")
+            results = []
+            for cat_id in catalog_ids:
+                cat_results = self.search(query, n_results, catalog_id=cat_id)
+                results.extend(cat_results)
+
+            results.sort(key=lambda x: x["distance"])
+            return results[:n_results]
 
     def get_all_ids(self) -> List[str]:
         try:
             return self.collection.get()["ids"]
-        except:
+        except (ValueError, KeyError, TypeError):
             return []

@@ -227,6 +227,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import { catalogApi, knowledgeApi } from '../api'
 import TreeNode from '../components/TreeNode.vue'
 
@@ -325,7 +326,7 @@ const loadUncategorizedKnowledge = async () => {
 
 const formatMarkdown = (text) => {
   if (!text) return ''
-  return marked(text)
+  return DOMPurify.sanitize(marked(text))
 }
 
 const editUncategorizedKnowledge = (item) => {

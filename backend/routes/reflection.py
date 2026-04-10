@@ -21,7 +21,8 @@ def get_reflection_manager():
         from knowledge_agent.reflection import ReflectionManager
         reflection_manager = ReflectionManager(
             knowledge_store=state.knowledge_store,
-            catalog_manager=state.catalog_manager
+            catalog_manager=state.catalog_manager,
+            qa_agent=state.qa_agent
         )
     return reflection_manager
 

@@ -72,12 +72,12 @@ def create_chain(prompt, llm) -> RunnableSequence:
 def _extract_json(text: str) -> Dict[str, Any]:
     try:
         return json.loads(text.strip())
-    except:
+    except Exception:
         json_match = re.search(r'\{[\s\S]*\}', text)
         if json_match:
             try:
                 return json.loads(json_match.group())
-            except:
+            except Exception:
                 pass
         return {}
 
@@ -167,9 +167,10 @@ class QAAgent:
                 
         except Exception as e:
             logger.warning(f"[PERF] LLM 目录匹配异常: {e}")
+            analysis = {}
 
         keywords = self._extract_keywords_simple(question)
-        domain = analysis.get("domain", "general") if 'analysis' in dir() else "general"
+        domain = analysis.get("domain", "general")
         catalog_name = self._get_catalog_name_from_domain(domain)
         new_catalog = self.catalog_manager.create_catalog(
             name=catalog_name,
@@ -244,7 +245,7 @@ class QAAgent:
                 {"question": question, "answer": answer}
             ).content.strip()
             return _extract_json(result)
-        except:
+        except Exception:
             return {
                 "summary": answer[:100],
                 "keywords": [],
@@ -385,6 +386,7 @@ class QAAgent:
                 self.catalog_manager.add_knowledge_to_catalog(catalog_id, knowledge_item.id)
         except Exception as e:
             print(f"Background store error: {e}")
+            logger.error(f"Background store error: {e}")
 
     def _background_store_with_match(
         self,

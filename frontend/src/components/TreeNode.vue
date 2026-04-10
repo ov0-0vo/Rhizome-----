@@ -177,6 +177,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import { knowledgeApi } from '../api'
 
 const props = defineProps({
@@ -239,7 +240,7 @@ const showKnowledgeList = computed(() => {
 
 const formatMarkdown = (text) => {
   if (!text) return ''
-  return marked(text)
+  return DOMPurify.sanitize(marked(text))
 }
 
 const toggleNode = async () => {

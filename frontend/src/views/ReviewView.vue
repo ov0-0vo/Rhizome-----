@@ -245,6 +245,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { reviewApi, catalogApi } from '../api'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 
 const summary = ref(null)
 const knowledgeList = ref([])
@@ -284,7 +285,7 @@ const getMasteryColor = (level) => {
 
 const formatMarkdown = (text) => {
   if (!text) return ''
-  return marked(text)
+  return DOMPurify.sanitize(marked(text))
 }
 
 const loadSummary = async () => {

@@ -112,6 +112,7 @@
 <script setup>
 import { ref } from 'vue'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import { knowledgeApi } from '../api'
 
 const query = ref('')
@@ -144,7 +145,7 @@ const truncate = (text, length) => {
 
 const formatMarkdown = (text) => {
   if (!text) return ''
-  return marked(text)
+  return DOMPurify.sanitize(marked(text))
 }
 
 const formatDate = (dateStr) => {

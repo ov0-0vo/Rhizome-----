@@ -79,6 +79,7 @@
 <script setup>
 import { ref, nextTick, onMounted } from 'vue'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import { chatApi } from '../api'
 
 const messages = ref([])
@@ -90,7 +91,8 @@ const useStream = ref(true)
 const hasStreamingMessage = ref(false)
 
 const formatMarkdown = (text) => {
-  return marked(text)
+  if (!text) return ''
+  return DOMPurify.sanitize(marked(text))
 }
 
 const scrollToBottom = (smooth = false) => {

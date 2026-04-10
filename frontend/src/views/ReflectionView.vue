@@ -117,11 +117,12 @@
 <script setup>
 import { ref, onMounted, nextTick } from 'vue'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import { reflectionApi } from '../api'
 
 const formatMarkdown = (text) => {
   if (!text) return ''
-  return marked(text)
+  return DOMPurify.sanitize(marked(text))
 }
 
 const getMessageRole = (role) => {

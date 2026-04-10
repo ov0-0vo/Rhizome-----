@@ -709,6 +709,8 @@ const getColorForCatalog = (catalogId) => {
   return catalogColorMap.get(catalogId)
 }
 
+let networkStableFrames = 0
+
 const simulateNetwork = () => {
   const canvas = networkCanvas.value
   if (!canvas) return
@@ -720,6 +722,7 @@ const simulateNetwork = () => {
   
   const edges = networkData.value.edges
   const nodeMap = new Map(networkNodes.map(n => [n.id, n]))
+  let totalKineticEnergy = 0
   
   networkNodes.forEach(node => {
     node.vx += (centerX - node.x) * 0.001
@@ -763,11 +766,20 @@ const simulateNetwork = () => {
   networkNodes.forEach(node => {
     node.vx *= 0.9
     node.vy *= 0.9
+    totalKineticEnergy += node.vx * node.vx + node.vy * node.vy
     node.x += node.vx
     node.y += node.vy
   })
   
   drawNetwork()
+  
+  if (totalKineticEnergy < 0.01) {
+    networkStableFrames++
+    if (networkStableFrames > 30) return
+  } else {
+    networkStableFrames = 0
+  }
+  
   requestAnimationFrame(simulateNetwork)
 }
 

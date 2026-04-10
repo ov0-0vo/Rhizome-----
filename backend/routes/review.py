@@ -3,6 +3,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import json
+import asyncio
 
 from ..dependencies import get_review_manager
 from knowledge_agent.review import (
@@ -175,6 +176,7 @@ async def generate_quiz_stream(
             count=request.count
         ):
             yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+            await asyncio.sleep(0)
 
     return StreamingResponse(
         event_generator(),

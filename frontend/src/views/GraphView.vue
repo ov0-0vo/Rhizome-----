@@ -160,8 +160,11 @@ async function loadGraph() {
 function startSimulation() {
   const centerX = (canvas.value?.width || 800) / 2
   const centerY = (canvas.value?.height || 600) / 2
+  let stableFrames = 0
   
   function simulate() {
+    let totalKineticEnergy = 0
+    
     nodes.forEach(node => {
       node.vx += (centerX - node.x) * 0.001
       node.vy += (centerY - node.y) * 0.001
@@ -203,11 +206,20 @@ function startSimulation() {
     nodes.forEach(node => {
       node.vx *= 0.9
       node.vy *= 0.9
+      totalKineticEnergy += node.vx * node.vx + node.vy * node.vy
       node.x += node.vx
       node.y += node.vy
     })
     
     draw()
+    
+    if (totalKineticEnergy < 0.01) {
+      stableFrames++
+      if (stableFrames > 30) return
+    } else {
+      stableFrames = 0
+    }
+    
     animationId = requestAnimationFrame(simulate)
   }
   

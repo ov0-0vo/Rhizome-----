@@ -35,8 +35,15 @@ class HistoryItem(BaseModel):
 @router.post("", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     from ..dependencies import get_state
+    from fastapi import HTTPException
+    
     current_state = get_state()
-    result = current_state.qa_agent.chat(request.message)
+    
+    try:
+        result = await asyncio.to_thread(current_state.qa_agent.chat, request.message)
+    except Exception as e:
+        logger.error(f"Chat error: {e}")
+        raise HTTPException(status_code=500, detail=f"对话处理失败: {str(e)}")
 
     catalog_name = None
     if result.get("catalog_id"):
@@ -83,6 +90,7 @@ async def chat_stream(request: ChatRequest):
                     "content": chunk
                 }
                 yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+                await asyncio.sleep(0)
 
             logger.info(f"[PERF] API层-发送完成, chunks: {chunk_count}")
 
