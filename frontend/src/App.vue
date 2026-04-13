@@ -67,6 +67,15 @@
         
         <div 
           class="nav-item" 
+          :class="{ active: activeTab === 'discovery' }"
+          @click="selectTab('discovery')"
+        >
+          <span class="nav-icon">🌟</span>
+          <span class="nav-text">每日发现</span>
+        </div>
+        
+        <div 
+          class="nav-item" 
           :class="{ active: activeTab === 'analysis' }"
           @click="selectTab('analysis')"
         >
@@ -108,6 +117,7 @@
         <GraphView v-else-if="activeTab === 'graph'" key="graph" />
         <SearchView v-else-if="activeTab === 'search'" key="search" />
         <StatsView v-else-if="activeTab === 'stats'" key="stats" />
+        <DiscoveryView v-else-if="activeTab === 'discovery'" key="discovery" />
         <AnalysisView v-else-if="activeTab === 'analysis'" key="analysis" />
         <ReviewView v-else-if="activeTab === 'review'" key="review" />
         <ReflectionView v-else-if="activeTab === 'reflection'" key="reflection" />
@@ -125,6 +135,7 @@ const CatalogView = defineAsyncComponent(() => import('./views/CatalogView.vue')
 const GraphView = defineAsyncComponent(() => import('./views/GraphView.vue'))
 const SearchView = defineAsyncComponent(() => import('./views/SearchView.vue'))
 const StatsView = defineAsyncComponent(() => import('./views/StatsView.vue'))
+const DiscoveryView = defineAsyncComponent(() => import('./views/DiscoveryView.vue'))
 const ReviewView = defineAsyncComponent(() => import('./views/ReviewView.vue'))
 const ReflectionView = defineAsyncComponent(() => import('./views/ReflectionView.vue'))
 const ConfigView = defineAsyncComponent(() => import('./views/ConfigView.vue'))

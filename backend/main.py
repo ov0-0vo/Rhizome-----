@@ -55,7 +55,7 @@ app.add_middleware(
 )
 
 
-from .routes import chat, knowledge, catalog, graph, feishu, review, config, reflection
+from .routes import chat, knowledge, catalog, graph, feishu, review, config, reflection, analysis, search, discovery
 
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(knowledge.router, prefix="/api/knowledge", tags=["knowledge"])
@@ -65,6 +65,9 @@ app.include_router(feishu.router, prefix="/api/feishu", tags=["feishu"])
 app.include_router(review.router, tags=["review"])
 app.include_router(config.router)
 app.include_router(reflection.router)
+app.include_router(analysis.router)
+app.include_router(search.router)
+app.include_router(discovery.router)
 
 
 @app.get("/")

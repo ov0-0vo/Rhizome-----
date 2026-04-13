@@ -9,11 +9,15 @@
 - **知识目录管理** - 自动将知识分类到结构化目录
 - **智能检索优化** - 目录索引 + 向量检索，只查看相关知识
 - **知识图谱可视化** - 图形化展示知识关联，支持关键词网络
+- **每日发现** - 基于知识领域的热点推荐和学习建议
+- **知识分析** - 相似度分析、重复检测、知识分布统计
+- **反思系统** - 对话反思、知识总结、自动归档
+- **智能复习** - 生成习题、间隔复习、知识巩固
 - **飞书机器人** - 对接飞书，支持群聊问答和知识管理
   - 流式回复：答案逐步显示，实时更新
   - 消息去重：防止重复处理同一条消息
   - 跟随气泡：显示"正在处理"提示（SDK 版本依赖）
-- **Markdown 渲染** - 知识详情支持 Markdown 格式展示
+- **Markdown 渲染** - 知识详情支持 Markdown 格式展示，含 XSS 防护
 - **多模型支持** - OpenAI、Anthropic、Ollama、Azure OpenAI
 - **本地嵌入模型** - 支持 HuggingFace 本地模型，离线可用
 - **前后端分离** - FastAPI 后端 + Vue 3 前端
@@ -117,15 +121,26 @@ rhizome/
 │       ├── knowledge.py   # 知识管理接口
 │       ├── catalog.py     # 目录管理接口
 │       ├── graph.py       # 知识图谱接口
+│       ├── search.py      # 搜索接口
+│       ├── analysis.py    # 知识分析接口
+│       ├── discovery.py   # 每日发现接口
+│       ├── review.py      # 复习接口
+│       ├── reflection.py  # 反思接口
+│       ├── config.py      # 配置接口
 │       └── feishu.py      # 飞书状态接口
 ├── frontend/              # Vue 3 前端
 │   ├── src/
 │   │   ├── views/        # 页面组件
-│   │   │   ├── ChatView.vue    # 对话页面
-│   │   │   ├── CatalogView.vue # 知识目录页面
-│   │   │   ├── SearchView.vue  # 搜索页面
-│   │   │   ├── StatsView.vue   # 统计页面
-│   │   │   └── GraphView.vue   # 知识图谱页面
+│   │   │   ├── ChatView.vue       # 对话页面
+│   │   │   ├── CatalogView.vue    # 知识目录页面
+│   │   │   ├── SearchView.vue     # 搜索页面
+│   │   │   ├── StatsView.vue      # 统计页面
+│   │   │   ├── GraphView.vue      # 知识图谱页面
+│   │   │   ├── AnalysisView.vue   # 知识分析页面
+│   │   │   ├── DiscoveryView.vue  # 每日发现页面
+│   │   │   ├── ReviewView.vue     # 复习页面
+│   │   │   ├── ReflectionView.vue # 反思页面
+│   │   │   └── ConfigView.vue     # 配置页面
 │   │   ├── components/   # 通用组件
 │   │   │   └── TreeNode.vue    # 目录树节点
 │   │   ├── api.js        # API 封装
@@ -135,7 +150,13 @@ rhizome/
 ├── knowledge_agent/       # 核心业务逻辑
 │   ├── agent/            # Agent 模块
 │   │   ├── qa_agent.py   # QA Agent（支持流式）
+│   │   ├── search_agent.py # 搜索 Agent
 │   │   └── prompt_templates.py
+│   ├── analysis/         # 知识分析模块
+│   │   ├── similarity_analyzer.py  # 相似度分析
+│   │   └── knowledge_organizer.py  # 知识整理
+│   ├── discovery/        # 每日发现模块
+│   │   └── daily_discovery.py  # 热点与推荐
 │   ├── feishu/           # 飞书机器人模块
 │   │   ├── client.py     # API 客户端（消息发送、编辑）
 │   │   ├── message.py    # 消息处理器（流式回复、去重）
@@ -145,9 +166,16 @@ rhizome/
 │   │   ├── catalog_manager.py
 │   │   ├── knowledge_store.py
 │   │   └── models.py
+│   ├── reflection/       # 反思模块
+│   │   └── reflection_manager.py
+│   ├── review/           # 复习模块
+│   │   ├── review_manager.py
+│   │   └── models.py
 │   ├── storage/          # 存储层
-│   │   ├── json_storage.py
-│   │   └── vector_store.py
+│   │   ├── json_storage.py  # JSON 存储（含内存缓存）
+│   │   └── vector_store.py  # 向量存储
+│   ├── tools/            # 工具模块
+│   │   └── search_tool.py   # 网络搜索工具
 │   └── config.py         # 配置管理
 ├── data/                 # 数据目录（自动创建）
 │   ├── catalog.json      # 知识目录
@@ -207,6 +235,40 @@ rhizome/
 - `GET /api/graph/keywords` - 获取关键词网络图谱
 - `GET /api/graph/catalog/{catalog_id}` - 获取指定目录的知识图谱
 
+### 搜索
+- `GET /api/search` - 搜索知识（支持目录过滤）
+
+### 知识分析
+- `GET /api/analysis/distribution` - 获取相似度分布统计
+- `GET /api/analysis/similar-pairs` - 获取相似知识对
+- `GET /api/analysis/duplicates` - 获取重复知识检测
+- `GET /api/analysis/merge-suggestions` - 获取合并建议
+- `POST /api/analysis/merge` - 合并知识
+- `POST /api/analysis/auto-organize` - 自动整理知识
+- `GET /api/analysis/knowledge-space` - 获取知识空间坐标
+- `GET /api/analysis/similarity-network` - 获取相似度网络
+- `POST /api/analysis/sync-catalog-counts` - 同步目录计数
+
+### 每日发现
+- `GET /api/discovery/hotspots` - 获取每日热点
+- `GET /api/discovery/recommendations` - 获取学习推荐
+- `GET /api/discovery/gaps` - 分析知识盲区
+- `GET /api/discovery/summary` - 获取发现摘要
+- `POST /api/discovery/refresh-cache` - 刷新缓存
+
+### 复习
+- `POST /api/review/quiz` - 生成习题
+- `POST /api/review/evaluate` - 评估答案
+
+### 反思
+- `POST /api/reflection/start` - 开始反思会话
+- `GET /api/reflection/sessions` - 获取反思会话列表
+- `GET /api/reflection/session/{id}` - 获取反思会话详情
+
+### 配置
+- `GET /api/config` - 获取配置信息
+- `PUT /api/config` - 更新配置
+
 ### 飞书机器人
 - `POST /api/feishu/webhook` - 飞书事件回调接口
 - `GET /api/feishu/status` - 获取飞书机器人状态
@@ -241,6 +303,30 @@ rhizome/
 - 节点拖拽和缩放交互
 - 点击节点查看详情
 - 力导向自动布局
+
+### 知识分析页面
+- 相似度分布统计
+- 相似知识对检测
+- 重复知识检测与合并
+- 知识空间可视化
+- 相似度网络图
+- 自动整理功能
+
+### 每日发现页面
+- 基于知识领域的热点推荐
+- 学习方向建议
+- 知识盲区分析
+- 知识分布可视化
+
+### 复习页面
+- 习题生成（选择题、填空题）
+- 答案评估与反馈
+- 复习进度追踪
+
+### 反思页面
+- 对话反思与总结
+- 知识自动归档
+- 反思会话管理
 
 ## 飞书机器人
 

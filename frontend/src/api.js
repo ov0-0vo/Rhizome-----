@@ -561,4 +561,26 @@ export const reflectionApi = {
   }
 }
 
+export const discoveryApi = {
+  getHotspots(maxItems = 10) {
+    return api.get('/discovery/hotspots', { params: { max_items: maxItems } })
+  },
+
+  getRecommendations() {
+    return api.get('/discovery/recommendations')
+  },
+
+  getGaps() {
+    return api.get('/discovery/gaps')
+  },
+
+  getSummary() {
+    return api.get('/discovery/summary')
+  },
+
+  refreshCache() {
+    return api.post('/discovery/refresh-cache')
+  }
+}
+
 export default api

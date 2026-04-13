@@ -723,6 +723,65 @@ BaseException
 
 ---
 
+#### 2.11 异步调用错误处理 ✅ 已修复
+- **文件**: `chat.py`, `analysis.py`
+- **问题**: 使用 `asyncio.to_thread` 包装同步方法时缺少异常处理，调用失败时直接抛出异常
+- **方案**: 添加 try-except 块，记录日志并返回友好的错误信息
+- **实施**: chat.py 和 analysis.py 所有 `asyncio.to_thread` 调用均添加错误处理
+
+**修改代码：**
+
+[chat.py](file:///c:/software/project/Rhizome/backend/routes/chat.py) — `chat()` 函数：
+
+```python
+@router.post("", response_model=ChatResponse)
+async def chat(request: ChatRequest):
+    from ..dependencies import get_state
+    from fastapi import HTTPException
+    
+    current_state = get_state()
+    
+    try:
+        result = await asyncio.to_thread(current_state.qa_agent.chat, request.message)
+    except Exception as e:
+        logger.error(f"Chat error: {e}")
+        raise HTTPException(status_code=500, detail=f"对话处理失败: {str(e)}")
+    ...
+```
+
+[analysis.py](file:///c:/software/project/Rhizome/backend/routes/analysis.py) — 所有端点统一模式：
+
+```python
+@router.get("/distribution", response_model=DistributionStats)
+async def get_distribution(threshold: float = Query(0.85)):
+    analyzer = get_similarity_analyzer()
+    try:
+        stats = await asyncio.to_thread(analyzer.analyze_distribution, high_similarity_threshold=threshold)
+        return DistributionStats(**stats.__dict__)
+    except Exception as e:
+        logger.error(f"分析分布失败: {e}")
+        raise HTTPException(status_code=500, detail=f"分析分布失败: {str(e)}")
+```
+
+**技术解析：**
+
+`asyncio.to_thread()` 将同步方法调度到线程池执行，可能抛出的异常包括：
+1. **LLM调用异常**：网络超时、API限流、模型错误
+2. **数据处理异常**：JSON解析失败、数据格式错误
+3. **资源异常**：内存不足、文件I/O错误
+
+未处理异常的后果：
+- 返回500内部错误，无具体信息
+- 日志中无错误记录，排查困难
+- 用户无法了解失败原因
+
+修复后的错误处理流程：
+1. `try-except` 捕获所有异常
+2. `logger.error()` 记录详细错误日志
+3. `HTTPException` 返回友好的中文错误信息
+
+---
+
 ## 三、附加优化：知识目录计数同步
 
 ### 目录计数与实际条目不一致修复
@@ -833,7 +892,7 @@ async def sync_catalog_counts():
 
 ## 四、实施进度汇总
 
-### 已完成（12项）
+### 已完成（13项）
 | 编号 | 优化项 | 类型 | 优先级 |
 |------|--------|------|--------|
 | 1.1 | LLM实例复用 | 性能 | P0 |
@@ -848,6 +907,7 @@ async def sync_catalog_counts():
 | 2.3 | 相似度计算公式修复 | Bug | P0 |
 | 2.5 | XSS风险修复 | 安全 | P0 |
 | 2.10 | 裸except修复 | 代码质量 | P1 |
+| 2.11 | 异步调用错误处理 | 代码质量 | P0 |
 
 ### 待实施（7项）
 | 编号 | 优化项 | 类型 | 优先级 |
