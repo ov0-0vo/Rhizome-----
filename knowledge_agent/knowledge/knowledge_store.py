@@ -1,10 +1,13 @@
 from typing import List, Dict, Any, Optional
 import json
+import logging
 
 from .models import KnowledgeItem
 from ..storage.json_storage import KnowledgeStorage
 from ..storage.vector_store import VectorStoreManager
 from ..config import config
+
+logger = logging.getLogger(__name__)
 
 
 class KnowledgeStore:
@@ -29,7 +32,13 @@ class KnowledgeStore:
         )
         
         self.json_storage.add_item(item)
-        self.vector_store.add_knowledge(item.id, question, answer, catalog_id)
+        
+        try:
+            self.vector_store.add_knowledge(item.id, question, answer, catalog_id)
+        except Exception as e:
+            logger.error(f"向量存储写入失败，已回滚JSON记录 {item.id}: {e}")
+            self.json_storage.delete_item(item.id)
+            raise
         
         return item
 
@@ -53,20 +62,36 @@ class KnowledgeStore:
     ) -> Optional[KnowledgeItem]:
         item = self.json_storage.get_item(knowledge_id)
         if item:
+            old_question = item.question
+            old_answer = item.answer
+            old_catalog_id = item.catalog_id
+            
             if question is not None:
                 item.question = question
             item.update(answer=answer, keywords=keywords, sources=sources)
             if catalog_id is not None:
                 item.catalog_id = catalog_id
             self.json_storage.update_item(item)
-            self.vector_store.update_knowledge(
-                item.id, item.question, item.answer, item.catalog_id
-            )
+            
+            try:
+                self.vector_store.update_knowledge(
+                    item.id, item.question, item.answer, item.catalog_id
+                )
+            except Exception as e:
+                logger.error(f"向量存储更新失败 {knowledge_id}: {e}")
+                item.question = old_question
+                item.answer = old_answer
+                item.catalog_id = old_catalog_id
+                self.json_storage.update_item(item)
         return item
 
     def delete_knowledge(self, knowledge_id: str):
         self.json_storage.delete_item(knowledge_id)
-        self.vector_store.delete_knowledge(knowledge_id)
+        
+        try:
+            self.vector_store.delete_knowledge(knowledge_id)
+        except Exception as e:
+            logger.error(f"向量存储删除失败 {knowledge_id}: {e}")
 
     def search(
         self,
@@ -91,8 +116,7 @@ class KnowledgeStore:
                     "created_at": item.created_at
                 })
             else:
-                import logging
-                logging.getLogger(__name__).warning(f"向量库中存在但JSON中缺失的知识条目: {vr['id']}")
+                logger.warning(f"向量库中存在但JSON中缺失的知识条目: {vr['id']}")
         
         return results
 

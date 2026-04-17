@@ -55,7 +55,7 @@ app.add_middleware(
 )
 
 
-from .routes import chat, knowledge, catalog, graph, feishu, review, config, reflection, analysis, search, discovery
+from .routes import chat, knowledge, catalog, graph, feishu, review, config, reflection, analysis, search, discovery, import_
 
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(knowledge.router, prefix="/api/knowledge", tags=["knowledge"])
@@ -68,6 +68,7 @@ app.include_router(reflection.router)
 app.include_router(analysis.router)
 app.include_router(search.router)
 app.include_router(discovery.router)
+app.include_router(import_.router, prefix="/api/import", tags=["import"])
 
 
 @app.get("/")
@@ -77,7 +78,37 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    return {
+    from fastapi.responses import JSONResponse
+    checks = {
+        "service": "rhizome-backend",
         "status": "healthy",
-        "service": "rhizome-backend"
+        "checks": {}
     }
+    
+    try:
+        state = get_state()
+        checks["checks"]["knowledge_store"] = "ok" if state.knowledge_store else "unavailable"
+        checks["checks"]["catalog_manager"] = "ok" if state.catalog_manager else "unavailable"
+        checks["checks"]["qa_agent"] = "ok" if state.qa_agent else "unavailable"
+        
+        if state.knowledge_store:
+            try:
+                items = state.knowledge_store.get_all_knowledge()
+                checks["checks"]["knowledge_count"] = len(items)
+            except Exception as e:
+                checks["checks"]["knowledge_store"] = f"error: {str(e)[:50]}"
+                checks["status"] = "degraded"
+        
+        if state.vector_store:
+            try:
+                ids = state.vector_store.get_all_ids()
+                checks["checks"]["vector_count"] = len(ids)
+            except Exception as e:
+                checks["checks"]["vector_store"] = f"error: {str(e)[:50]}"
+                checks["status"] = "degraded"
+    except Exception as e:
+        checks["status"] = "unhealthy"
+        checks["error"] = str(e)
+    
+    status_code = 200 if checks["status"] == "healthy" else 503 if checks["status"] == "unhealthy" else 200
+    return JSONResponse(content=checks, status_code=status_code)

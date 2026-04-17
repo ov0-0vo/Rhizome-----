@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import List, Dict, Any
 import logging
 import asyncio
+import time
 
 router = APIRouter(prefix="/api/analysis", tags=["analysis"])
 
@@ -10,6 +11,26 @@ logger = logging.getLogger(__name__)
 
 similarity_analyzer = None
 knowledge_organizer = None
+
+_analysis_cache: Dict[str, Dict[str, Any]] = {}
+_CACHE_TTL = 60
+
+
+def _get_cached(key: str) -> Any | None:
+    if key in _analysis_cache:
+        entry = _analysis_cache[key]
+        if time.time() - entry["time"] < _CACHE_TTL:
+            return entry["data"]
+        del _analysis_cache[key]
+    return None
+
+
+def _set_cached(key: str, data: Any):
+    _analysis_cache[key] = {"data": data, "time": time.time()}
+
+
+def invalidate_analysis_cache():
+    _analysis_cache.clear()
 
 
 def get_similarity_analyzer():
@@ -112,10 +133,17 @@ class AutoOrganizeRequest(BaseModel):
 async def get_distribution(
     threshold: float = Query(0.85, description="高相似度阈值")
 ):
+    cache_key = f"distribution_{threshold}"
+    cached = _get_cached(cache_key)
+    if cached:
+        return cached
+    
     analyzer = get_similarity_analyzer()
     try:
         stats = await asyncio.to_thread(analyzer.analyze_distribution, high_similarity_threshold=threshold)
-        return DistributionStats(**stats.__dict__)
+        result = DistributionStats(**stats.__dict__)
+        _set_cached(cache_key, result)
+        return result
     except Exception as e:
         logger.error(f"分析分布失败: {e}")
         raise HTTPException(status_code=500, detail=f"分析分布失败: {str(e)}")
@@ -136,10 +164,17 @@ async def get_similar_pairs(
     threshold: float = Query(0.85, description="相似度阈值"),
     limit: int = Query(50, description="返回数量限制")
 ):
+    cache_key = f"similar_pairs_{threshold}_{limit}"
+    cached = _get_cached(cache_key)
+    if cached:
+        return cached
+    
     analyzer = get_similarity_analyzer()
     try:
         pairs = await asyncio.to_thread(analyzer.find_similar_pairs, threshold=threshold, limit=limit)
-        return [SimilarPair(**p.__dict__) for p in pairs]
+        result = [SimilarPair(**p.__dict__) for p in pairs]
+        _set_cached(cache_key, result)
+        return result
     except Exception as e:
         logger.error(f"查找相似对失败: {e}")
         raise HTTPException(status_code=500, detail=f"查找相似对失败: {str(e)}")
@@ -149,10 +184,17 @@ async def get_similar_pairs(
 async def get_duplicates(
     threshold: float = Query(0.90, description="重复检测阈值")
 ):
+    cache_key = f"duplicates_{threshold}"
+    cached = _get_cached(cache_key)
+    if cached:
+        return cached
+    
     analyzer = get_similarity_analyzer()
     try:
         duplicates = await asyncio.to_thread(analyzer.find_duplicates, threshold=threshold)
-        return [DuplicateGroup(**d) for d in duplicates]
+        result = [DuplicateGroup(**d) for d in duplicates]
+        _set_cached(cache_key, result)
+        return result
     except Exception as e:
         logger.error(f"查找重复项失败: {e}")
         raise HTTPException(status_code=500, detail=f"查找重复项失败: {str(e)}")
@@ -160,9 +202,16 @@ async def get_duplicates(
 
 @router.get("/catalog-distribution", response_model=List[CatalogDistribution])
 async def get_catalog_distribution():
+    cache_key = "catalog_distribution"
+    cached = _get_cached(cache_key)
+    if cached:
+        return cached
+    
     analyzer = get_similarity_analyzer()
     try:
-        return await asyncio.to_thread(analyzer.analyze_catalog_distribution)
+        result = await asyncio.to_thread(analyzer.analyze_catalog_distribution)
+        _set_cached(cache_key, result)
+        return result
     except Exception as e:
         logger.error(f"获取目录分布失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取目录分布失败: {str(e)}")

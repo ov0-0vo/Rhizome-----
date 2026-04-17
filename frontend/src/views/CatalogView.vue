@@ -13,6 +13,10 @@
             <span class="btn-icon">➕</span>
             <span class="btn-text">新建目录</span>
           </button>
+          <button class="btn btn-secondary" @click="showImportModal = true">
+            <span class="btn-icon">📥</span>
+            <span class="btn-text">导入知识</span>
+          </button>
           <button class="btn btn-secondary" @click="loadTree">
             <span class="btn-icon">🔄</span>
             <span class="btn-text">刷新</span>
@@ -221,6 +225,128 @@
         </div>
       </div>
     </div>
+
+    <div v-if="showImportModal" class="modal-overlay" @click.self="closeImportModal">
+      <div class="modal import-modal">
+        <div class="modal-header">
+          <h3>📥 导入知识</h3>
+          <button class="close-btn" @click="closeImportModal">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="import-tabs">
+            <button 
+              :class="['import-tab', { active: importMode === 'file' }]" 
+              @click="importMode = 'file'"
+            >
+              文件导入
+            </button>
+            <button 
+              :class="['import-tab', { active: importMode === 'text' }]" 
+              @click="importMode = 'text'"
+            >
+              文本导入
+            </button>
+          </div>
+          
+          <div v-if="importMode === 'file'" class="import-content">
+            <div class="form-group">
+              <label>选择文件</label>
+              <div 
+                class="file-drop-zone"
+                :class="{ 'drag-over': isDragging }"
+                @dragover.prevent="isDragging = true"
+                @dragleave.prevent="isDragging = false"
+                @drop.prevent="handleFileDrop"
+                @click="$refs.fileInput.click()"
+              >
+                <input 
+                  ref="fileInput"
+                  type="file" 
+                  accept=".md,.markdown,.txt"
+                  @change="handleFileSelect"
+                  style="display: none"
+                />
+                <div v-if="!selectedFile" class="drop-placeholder">
+                  <span class="drop-icon">📄</span>
+                  <p>拖拽文件到此处，或点击选择</p>
+                  <p class="drop-hint">支持 .md, .txt 文件</p>
+                </div>
+                <div v-else class="selected-file">
+                  <span class="file-icon">📝</span>
+                  <span class="file-name">{{ selectedFile.name }}</span>
+                  <button class="remove-file-btn" @click.stop="selectedFile = null">✕</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div v-else class="import-content">
+            <div class="form-group">
+              <label>粘贴内容</label>
+              <textarea 
+                v-model="importText" 
+                class="form-textarea import-textarea"
+                placeholder="粘贴知识内容...&#10;&#10;内容将按段落自动分割为多条知识条目"
+                rows="10"
+              ></textarea>
+            </div>
+            <div class="form-group">
+              <label>分割方式</label>
+              <select v-model="splitBy" class="form-select">
+                <option value="paragraph">按段落分割</option>
+                <option value="line">按行分割</option>
+              </select>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label>目标目录（可选）</label>
+            <select v-model="importCatalogId" class="form-select">
+              <option :value="null">自动创建目录</option>
+              <option v-for="catalog in flatCatalogs" :key="catalog.id" :value="catalog.id">
+                {{ catalog.path }}
+              </option>
+            </select>
+          </div>
+          
+          <div class="form-group" v-if="importMode === 'file'">
+            <label class="checkbox-label">
+              <input type="checkbox" v-model="autoCreateCatalog" />
+              <span>自动创建目录结构</span>
+            </label>
+          </div>
+          
+          <div v-if="importResult" class="import-result">
+            <div :class="['result-header', importResult.success ? 'success' : 'error']">
+              {{ importResult.success ? '✅ 导入完成' : '❌ 导入失败' }}
+            </div>
+            <div class="result-stats" v-if="importResult.success">
+              <span>总计: {{ importResult.total_sections }} 条</span>
+              <span>成功: {{ importResult.imported_count }} 条</span>
+              <span>跳过: {{ importResult.skipped_count }} 条</span>
+            </div>
+            <div v-if="importResult.errors.length" class="result-errors">
+              <div v-for="(error, i) in importResult.errors.slice(0, 3)" :key="i" class="error-item">
+                {{ error }}
+              </div>
+              <div v-if="importResult.errors.length > 3" class="error-more">
+                还有 {{ importResult.errors.length - 3 }} 条错误...
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" @click="closeImportModal">关闭</button>
+          <button 
+            class="btn btn-primary" 
+            @click="handleImport" 
+            :disabled="importing || (!selectedFile && !importText.trim())"
+          >
+            {{ importing ? '导入中...' : '开始导入' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -228,7 +354,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import { catalogApi, knowledgeApi } from '../api'
+import { catalogApi, knowledgeApi, importApi } from '../api'
 import TreeNode from '../components/TreeNode.vue'
 
 const tree = ref(null)
@@ -248,6 +374,17 @@ const savingKnowledge = ref(false)
 const showDeleteConfirm = ref(false)
 const deletingKnowledge = ref(null)
 const deleting = ref(false)
+
+const showImportModal = ref(false)
+const importMode = ref('file')
+const selectedFile = ref(null)
+const isDragging = ref(false)
+const importText = ref('')
+const splitBy = ref('paragraph')
+const importCatalogId = ref(null)
+const autoCreateCatalog = ref(true)
+const importing = ref(false)
+const importResult = ref(null)
 
 const knowledgeForm = ref({
   id: null,
@@ -280,6 +417,26 @@ const totalKnowledge = computed(() => {
     return total
   }
   return count(tree.value)
+})
+
+const flatCatalogs = computed(() => {
+  if (!tree.value) return []
+  const result = []
+  const flatten = (node, path = '') => {
+    const currentPath = path ? `${path} / ${node.name}` : node.name
+    if (node.id !== 'multi-root') {
+      result.push({ id: node.id, name: node.name, path: currentPath })
+    }
+    if (node.children) {
+      node.children.forEach(child => flatten(child, currentPath))
+    }
+  }
+  if (tree.value.id === 'multi-root') {
+    tree.value.children.forEach(child => flatten(child))
+  } else {
+    flatten(tree.value)
+  }
+  return result
 })
 
 const loadTree = async () => {
@@ -460,6 +617,71 @@ const submitForm = async () => {
   } catch (error) {
     console.error('Failed to save catalog:', error)
     alert('保存失败')
+  }
+}
+
+const handleFileSelect = (event) => {
+  const file = event.target.files[0]
+  if (file) {
+    selectedFile.value = file
+  }
+}
+
+const handleFileDrop = (event) => {
+  isDragging.value = false
+  const file = event.dataTransfer.files[0]
+  if (file && (file.name.endsWith('.md') || file.name.endsWith('.txt') || file.name.endsWith('.markdown'))) {
+    selectedFile.value = file
+  } else {
+    alert('请选择 .md 或 .txt 文件')
+  }
+}
+
+const closeImportModal = () => {
+  showImportModal.value = false
+  selectedFile.value = null
+  importText.value = ''
+  importResult.value = null
+  importCatalogId.value = null
+}
+
+const handleImport = async () => {
+  if (importing.value) return
+  
+  importing.value = true
+  importResult.value = null
+  
+  try {
+    let result
+    if (importMode.value === 'file' && selectedFile.value) {
+      result = await importApi.importFile(selectedFile.value, {
+        catalog_id: importCatalogId.value,
+        auto_create_catalog: autoCreateCatalog.value,
+        use_llm_analysis: false
+      })
+    } else if (importMode.value === 'text' && importText.value.trim()) {
+      result = await importApi.importText(importText.value, {
+        catalog_id: importCatalogId.value,
+        split_by: splitBy.value
+      })
+    }
+    
+    if (result) {
+      importResult.value = result.data
+      
+      if (result.data.success && result.data.imported_count > 0) {
+        await loadTree()
+        await loadUncategorizedCount()
+      }
+    }
+  } catch (error) {
+    console.error('Import failed:', error)
+    importResult.value = {
+      success: false,
+      errors: [error.response?.data?.detail || error.message || '导入失败']
+    }
+  } finally {
+    importing.value = false
   }
 }
 
@@ -757,6 +979,193 @@ onMounted(loadTree)
   margin-bottom: 8px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+
+.import-modal {
+  max-width: 600px;
+}
+
+.import-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.import-tab {
+  flex: 1;
+  padding: 10px 16px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.import-tab:hover {
+  background: var(--bg-hover);
+}
+
+.import-tab.active {
+  background: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+}
+
+.import-content {
+  margin-bottom: 16px;
+}
+
+.file-drop-zone {
+  border: 2px dashed var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: 40px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: var(--bg-secondary);
+}
+
+.file-drop-zone:hover,
+.file-drop-zone.drag-over {
+  border-color: var(--primary-color);
+  background: var(--bg-hover);
+}
+
+.drop-placeholder {
+  color: var(--text-secondary);
+}
+
+.drop-icon {
+  font-size: 48px;
+  display: block;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+
+.drop-hint {
+  font-size: 12px;
+  margin-top: 8px;
+  opacity: 0.7;
+}
+
+.selected-file {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.file-icon {
+  font-size: 32px;
+}
+
+.file-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.remove-file-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: var(--danger-light);
+  color: var(--danger-color);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.remove-file-btn:hover {
+  background: var(--danger-color);
+  color: white;
+}
+
+.import-textarea {
+  min-height: 200px;
+  font-family: inherit;
+}
+
+.form-select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.form-select:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.import-result {
+  margin-top: 16px;
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  background: var(--bg-secondary);
+}
+
+.result-header {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.result-header.success {
+  color: var(--success-color);
+}
+
+.result-header.error {
+  color: var(--danger-color);
+}
+
+.result-stats {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.result-errors {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-light);
+}
+
+.error-item {
+  font-size: 12px;
+  color: var(--danger-color);
+  margin-bottom: 4px;
+}
+
+.error-more {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-style: italic;
 }
 
 .detail-content {

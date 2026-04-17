@@ -1,6 +1,7 @@
 import json
 import os
 import logging
+import threading
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 
@@ -13,6 +14,7 @@ class CatalogStorage:
     def __init__(self, catalog_file: str):
         self.catalog_file = catalog_file
         self._cache: Optional[Dict[str, Any]] = None
+        self._lock = threading.Lock()
         self._ensure_file_exists()
 
     def _ensure_file_exists(self):
@@ -24,14 +26,16 @@ class CatalogStorage:
     def _read(self) -> Dict[str, Any]:
         if self._cache is not None:
             return self._cache
-        with open(self.catalog_file, 'r', encoding='utf-8') as f:
-            self._cache = json.load(f)
-        return self._cache
+        with self._lock:
+            with open(self.catalog_file, 'r', encoding='utf-8') as f:
+                self._cache = json.load(f)
+            return self._cache
 
     def _write(self, data: Dict[str, Any]):
-        with open(self.catalog_file, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        self._cache = data
+        with self._lock:
+            with open(self.catalog_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            self._cache = data
 
     def invalidate_cache(self):
         self._cache = None
@@ -90,6 +94,7 @@ class KnowledgeStorage:
     def __init__(self, knowledge_file: str):
         self.knowledge_file = knowledge_file
         self._cache: Optional[Dict[str, Any]] = None
+        self._lock = threading.Lock()
         self._ensure_file_exists()
 
     def _ensure_file_exists(self):
@@ -101,14 +106,16 @@ class KnowledgeStorage:
     def _read(self) -> Dict[str, Any]:
         if self._cache is not None:
             return self._cache
-        with open(self.knowledge_file, 'r', encoding='utf-8') as f:
-            self._cache = json.load(f)
-        return self._cache
+        with self._lock:
+            with open(self.knowledge_file, 'r', encoding='utf-8') as f:
+                self._cache = json.load(f)
+            return self._cache
 
     def _write(self, data: Dict[str, Any]):
-        with open(self.knowledge_file, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        self._cache = data
+        with self._lock:
+            with open(self.knowledge_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            self._cache = data
 
     def invalidate_cache(self):
         self._cache = None

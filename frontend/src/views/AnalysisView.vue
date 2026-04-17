@@ -1010,19 +1010,38 @@ const syncCatalogCounts = async () => {
 }
 
 const initCanvases = () => {
+  const dpr = window.devicePixelRatio || 1
   if (scatterCanvas.value) {
     const parent = scatterCanvas.value.parentElement
-    scatterCanvas.value.width = parent.clientWidth
-    scatterCanvas.value.height = 500
+    const w = parent.clientWidth
+    const h = 500
+    scatterCanvas.value.width = w * dpr
+    scatterCanvas.value.height = h * dpr
+    scatterCanvas.value.style.width = w + 'px'
+    scatterCanvas.value.style.height = h + 'px'
+    const ctx = scatterCanvas.value.getContext('2d')
+    ctx.scale(dpr, dpr)
   }
   if (heatmapCanvas.value) {
-    heatmapCanvas.value.width = 600
-    heatmapCanvas.value.height = 600
+    const w = 600
+    const h = 600
+    heatmapCanvas.value.width = w * dpr
+    heatmapCanvas.value.height = h * dpr
+    heatmapCanvas.value.style.width = w + 'px'
+    heatmapCanvas.value.style.height = h + 'px'
+    const ctx = heatmapCanvas.value.getContext('2d')
+    ctx.scale(dpr, dpr)
   }
   if (networkCanvas.value) {
     const parent = networkCanvas.value.parentElement
-    networkCanvas.value.width = parent.clientWidth
-    networkCanvas.value.height = 500
+    const w = parent.clientWidth
+    const h = 500
+    networkCanvas.value.width = w * dpr
+    networkCanvas.value.height = h * dpr
+    networkCanvas.value.style.width = w + 'px'
+    networkCanvas.value.style.height = h + 'px'
+    const ctx = networkCanvas.value.getContext('2d')
+    ctx.scale(dpr, dpr)
   }
 }
 

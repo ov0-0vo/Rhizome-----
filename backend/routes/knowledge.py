@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
@@ -63,21 +63,31 @@ class Statistics(BaseModel):
     top_keywords: List[Dict[str, Any]]
 
 
-@router.get("", response_model=List[KnowledgeItem])
-async def get_all_knowledge():
+@router.get("")
+async def get_all_knowledge(
+    offset: int = Query(0, ge=0, description="偏移量"),
+    limit: int = Query(50, ge=1, le=200, description="每页数量")
+):
     current_state = get_state()
     items = current_state.qa_agent.get_all_knowledge()
-    return [
-        KnowledgeItem(
-            id=item.id,
-            question=item.question,
-            answer=item.answer,
-            keywords=item.keywords,
-            catalog_id=item.catalog_id,
-            created_at=item.created_at
-        )
-        for item in items
-    ]
+    total = len(items)
+    paginated = items[offset:offset + limit]
+    return {
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "items": [
+            KnowledgeItem(
+                id=item.id,
+                question=item.question,
+                answer=item.answer,
+                keywords=item.keywords,
+                catalog_id=item.catalog_id,
+                created_at=item.created_at
+            )
+            for item in paginated
+        ]
+    }
 
 
 @router.get("/statistics", response_model=Statistics)
@@ -107,7 +117,7 @@ async def get_statistics():
                 week_count += 1
             if created >= month_start:
                 month_count += 1
-        except:
+        except (ValueError, TypeError):
             pass
         
         for kw in item.keywords:

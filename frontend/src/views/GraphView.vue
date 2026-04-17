@@ -101,9 +101,13 @@ function initCanvas() {
   const cvs = canvas.value
   if (!container || !cvs) return
   
-  cvs.width = container.clientWidth
-  cvs.height = container.clientHeight
+  const dpr = window.devicePixelRatio || 1
+  cvs.width = container.clientWidth * dpr
+  cvs.height = container.clientHeight * dpr
+  cvs.style.width = container.clientWidth + 'px'
+  cvs.style.height = container.clientHeight + 'px'
   ctx = cvs.getContext('2d')
+  ctx.scale(dpr, dpr)
 }
 
 function resizeCanvas() {

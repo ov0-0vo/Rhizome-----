@@ -225,6 +225,8 @@ const gaps = ref({
   identified_gaps: []
 })
 
+const summary = ref(null)
+
 const loadHotspots = async () => {
   try {
     const response = await discoveryApi.getHotspots()
@@ -255,7 +257,7 @@ const loadGaps = async () => {
 const loadSummary = async () => {
   try {
     const response = await discoveryApi.getSummary()
-    console.log('Discovery summary:', response.data)
+    summary.value = response.data
   } catch (error) {
     console.error('Failed to load summary:', error)
   }

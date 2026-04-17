@@ -385,13 +385,15 @@ const submitAnswer = async () => {
 
   try {
     const res = await reviewApi.evaluateQuiz(
-      currentQuiz.value,
-      selectedAnswer.value,
-      currentQuiz.value.correct_answer,
-      currentQuiz.value.explanation
+      currentQuiz.value.quiz_token,
+      selectedAnswer.value
     )
     quizResult.value = res.data
     quizSubmitted.value = true
+    
+    if (res.data.correct_answer) {
+      currentQuiz.value.correct_answer = res.data.correct_answer
+    }
 
     quizResults.value.push({
       quiz_id: currentQuiz.value.id,

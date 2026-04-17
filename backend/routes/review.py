@@ -4,14 +4,16 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import json
 import asyncio
+import uuid
 
 from ..dependencies import get_review_manager
 from knowledge_agent.review import (
     ReviewManager, QuizType, QuizDifficulty, ReviewMode
 )
 
-
 router = APIRouter(prefix="/api/review", tags=["review"])
+
+_pending_quizzes: Dict[str, Dict[str, str]] = {}
 
 
 class KnowledgeForReviewResponse(BaseModel):
@@ -36,10 +38,8 @@ class QuizData(BaseModel):
 
 
 class QuizAnswerRequest(BaseModel):
-    quiz: QuizData
+    quiz_id: str
     user_answer: str
-    correct_answer: str
-    explanation: str = ""
 
 
 class QuizResultResponse(BaseModel):
@@ -117,7 +117,6 @@ async def generate_quiz(
     request: QuizGenerateRequest,
     manager: ReviewManager = Depends(get_review_manager)
 ):
-    """生成习题"""
     try:
         quiz_type = QuizType(request.quiz_type)
     except ValueError:
@@ -135,21 +134,31 @@ async def generate_quiz(
         count=request.count
     )
 
-    return {
-        "quizzes": [
-            {
-                "id": q.id,
-                "knowledge_id": q.knowledge_id,
-                "question": q.question,
-                "quiz_type": q.quiz_type.value,
-                "difficulty": q.difficulty.value,
-                "options": q.options,
-                "correct_answer": q.correct_answer,
-                "explanation": q.explanation
-            }
-            for q in quizzes
-        ]
-    }
+    result_quizzes = []
+    for q in quizzes:
+        quiz_token = str(uuid.uuid4())
+        _pending_quizzes[quiz_token] = {
+            "id": q.id,
+            "knowledge_id": q.knowledge_id,
+            "question": q.question,
+            "quiz_type": q.quiz_type.value,
+            "difficulty": q.difficulty.value,
+            "options": q.options,
+            "correct_answer": q.correct_answer,
+            "explanation": q.explanation
+        }
+        result_quizzes.append({
+            "quiz_token": quiz_token,
+            "id": q.id,
+            "knowledge_id": q.knowledge_id,
+            "question": q.question,
+            "quiz_type": q.quiz_type.value,
+            "difficulty": q.difficulty.value,
+            "options": q.options,
+            "explanation": q.explanation
+        })
+
+    return {"quizzes": result_quizzes}
 
 
 @router.post("/quiz/generate/stream")
@@ -157,7 +166,6 @@ async def generate_quiz_stream(
     request: QuizGenerateRequest,
     manager: ReviewManager = Depends(get_review_manager)
 ):
-    """流式生成习题"""
     try:
         quiz_type = QuizType(request.quiz_type)
     except ValueError:
@@ -175,6 +183,21 @@ async def generate_quiz_stream(
             difficulty=difficulty,
             count=request.count
         ):
+            if event.get("type") == "quiz":
+                quiz_data = event["quiz"]
+                quiz_token = str(uuid.uuid4())
+                _pending_quizzes[quiz_token] = {
+                    "id": quiz_data["id"],
+                    "knowledge_id": quiz_data["knowledge_id"],
+                    "question": quiz_data["question"],
+                    "quiz_type": quiz_data["quiz_type"],
+                    "difficulty": quiz_data["difficulty"],
+                    "options": quiz_data.get("options", []),
+                    "correct_answer": quiz_data["correct_answer"],
+                    "explanation": quiz_data.get("explanation", "")
+                }
+                event["quiz"]["quiz_token"] = quiz_token
+                del event["quiz"]["correct_answer"]
             yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
             await asyncio.sleep(0)
 
@@ -194,18 +217,22 @@ async def evaluate_quiz_answer(
     request: QuizAnswerRequest,
     manager: ReviewManager = Depends(get_review_manager)
 ):
-    """评估习题答案"""
     from knowledge_agent.review.models import Quiz
 
+    quiz_data = _pending_quizzes.pop(request.quiz_id, None)
+    if not quiz_data:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="习题已过期或不存在，请重新生成")
+
     quiz = Quiz(
-        id=request.quiz.id,
-        knowledge_id=request.quiz.knowledge_id,
-        question=request.quiz.question,
-        quiz_type=QuizType(request.quiz.quiz_type),
-        difficulty=QuizDifficulty(request.quiz.difficulty),
-        options=request.quiz.options,
-        correct_answer=request.correct_answer,
-        explanation=request.explanation
+        id=quiz_data["id"],
+        knowledge_id=quiz_data["knowledge_id"],
+        question=quiz_data["question"],
+        quiz_type=QuizType(quiz_data["quiz_type"]),
+        difficulty=QuizDifficulty(quiz_data["difficulty"]),
+        options=quiz_data.get("options", []),
+        correct_answer=quiz_data["correct_answer"],
+        explanation=quiz_data.get("explanation", "")
     )
 
     result = manager.evaluate_answer(quiz, request.user_answer)
@@ -213,11 +240,9 @@ async def evaluate_quiz_answer(
     response = QuizResultResponse(
         is_correct=result.is_correct,
         score=result.score,
-        feedback=result.feedback
+        feedback=result.feedback,
+        correct_answer=quiz_data["correct_answer"]
     )
-
-    if not result.is_correct:
-        response.correct_answer = request.correct_answer
 
     return response
 

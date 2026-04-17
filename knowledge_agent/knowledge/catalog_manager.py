@@ -191,3 +191,14 @@ class CatalogManager:
                 })
         
         return stats
+
+    def find_catalog_by_name(self, name: str, parent_id: str = None) -> Optional[KnowledgeCatalog]:
+        catalogs = self.get_all_catalogs()
+        for catalog in catalogs:
+            if catalog.name.lower() == name.lower():
+                if parent_id is None or catalog.parent_id == parent_id:
+                    return catalog
+        return None
+
+    def invalidate_cache(self):
+        self.storage.invalidate_cache()

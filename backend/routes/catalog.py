@@ -111,5 +111,27 @@ async def update_catalog(catalog_id: str, request: UpdateCatalogRequest):
 async def delete_catalog(catalog_id: str):
     from ..dependencies import get_state
     current_state = get_state()
+    
+    catalog = current_state.catalog_manager.get_catalog(catalog_id)
+    if not catalog:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Catalog not found")
+    
+    for knowledge_id in catalog.knowledge_items:
+        item = current_state.knowledge_store.get_knowledge(knowledge_id)
+        if item:
+            item.catalog_id = catalog.parent_id
+            current_state.knowledge_store.update_knowledge(
+                knowledge_id, catalog_id=catalog.parent_id
+            )
+    
+    for child_id in catalog.children:
+        child = current_state.catalog_manager.get_catalog(child_id)
+        if child:
+            child.parent_id = catalog.parent_id
+            current_state.catalog_manager.update_catalog(
+                child_id, name=child.name, keywords=child.keywords
+            )
+    
     current_state.catalog_manager.delete_catalog(catalog_id)
     return {"message": "Catalog deleted successfully"}

@@ -126,7 +126,7 @@ class VectorStoreManager:
     def _get_or_create_collection(self):
         try:
             return self.client.get_collection(name="knowledge")
-        except (ValueError, KeyError, TypeError):
+        except Exception:
             return self.client.create_collection(
                 name="knowledge",
                 metadata={"hnsw:space": "cosine"}

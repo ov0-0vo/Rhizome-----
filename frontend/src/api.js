@@ -53,15 +53,18 @@ export const chatApi = {
     }).then(response => {
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
+      let buffer = ''
 
       function read() {
         reader.read().then(({ done, value }) => {
           if (done) {
+            if (onDone) onDone()
             return
           }
 
-          const text = decoder.decode(value, { stream: true })
-          const lines = text.split('\n')
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || ''
 
           for (const line of lines) {
             if (line.startsWith('data: ')) {
@@ -210,6 +213,7 @@ export const reviewApi = {
         const reader = response.body.getReader()
         const decoder = new TextDecoder()
         const quizzes = []
+        let buffer = ''
 
         function read() {
           reader.read().then(({ done, value }) => {
@@ -218,8 +222,9 @@ export const reviewApi = {
               return
             }
 
-            const text = decoder.decode(value, { stream: true })
-            const lines = text.split('\n')
+            buffer += decoder.decode(value, { stream: true })
+            const lines = buffer.split('\n')
+            buffer = lines.pop() || ''
 
             for (const line of lines) {
               if (line.startsWith('data: ')) {
@@ -250,12 +255,10 @@ export const reviewApi = {
     })
   },
 
-  evaluateQuiz(quiz, userAnswer, correctAnswer, explanation = '') {
+  evaluateQuiz(quizToken, userAnswer) {
     return api.post('/review/quiz/evaluate', {
-      quiz: quiz,
-      user_answer: userAnswer,
-      correct_answer: correctAnswer,
-      explanation: explanation
+      quiz_id: quizToken,
+      user_answer: userAnswer
     })
   },
 
@@ -580,6 +583,33 @@ export const discoveryApi = {
 
   refreshCache() {
     return api.post('/discovery/refresh-cache')
+  }
+}
+
+export const importApi = {
+  importFile(file, options = {}) {
+    const formData = new FormData()
+    formData.append('file', file)
+    if (options.catalog_id) {
+      formData.append('catalog_id', options.catalog_id)
+    }
+    formData.append('auto_create_catalog', options.auto_create_catalog !== false)
+    formData.append('use_llm_analysis', options.use_llm_analysis === true)
+    
+    return api.post('/import/file', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      },
+      timeout: 120000
+    })
+  },
+
+  importText(content, options = {}) {
+    return api.post('/import/text', {
+      content,
+      catalog_id: options.catalog_id || null,
+      split_by: options.split_by || 'paragraph'
+    })
   }
 }
 

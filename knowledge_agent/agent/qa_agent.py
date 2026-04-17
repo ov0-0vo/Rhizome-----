@@ -385,7 +385,6 @@ class QAAgent:
             if catalog_id:
                 self.catalog_manager.add_knowledge_to_catalog(catalog_id, knowledge_item.id)
         except Exception as e:
-            print(f"Background store error: {e}")
             logger.error(f"Background store error: {e}")
 
     def _background_store_with_match(
