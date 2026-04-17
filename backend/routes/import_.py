@@ -5,7 +5,7 @@ import logging
 import asyncio
 
 from ..dependencies import get_state
-from knowledge_agent.import_ import KnowledgeImporter
+from knowledge_agent.import_ import KnowledgeImporter, document_manager
 
 logger = logging.getLogger(__name__)
 
@@ -19,12 +19,46 @@ class ImportResultResponse(BaseModel):
     skipped_count: int
     errors: List[str]
     imported_knowledge: List[Dict[str, Any]]
+    document_id: Optional[str] = None
 
 
 class TextImportRequest(BaseModel):
     content: str
     catalog_id: Optional[str] = None
     split_by: str = "paragraph"
+
+
+class DocumentResponse(BaseModel):
+    id: str
+    filename: str
+    original_filename: str
+    file_size: int
+    imported_at: str
+    imported_count: int
+    skipped_count: int
+    total_sections: int
+    knowledge_ids: List[str]
+    errors: List[str]
+
+
+class DocumentDetailResponse(BaseModel):
+    id: str
+    filename: str
+    original_filename: str
+    file_size: int
+    imported_at: str
+    imported_count: int
+    skipped_count: int
+    total_sections: int
+    knowledge_ids: List[str]
+    errors: List[str]
+    content: Optional[str] = None
+
+
+class DocumentStatsResponse(BaseModel):
+    total_documents: int
+    total_knowledge: int
+    total_size: int
 
 
 @router.post("/file", response_model=ImportResultResponse)
@@ -76,7 +110,8 @@ async def import_file(
             imported_count=result.imported_count,
             skipped_count=result.skipped_count,
             errors=result.errors,
-            imported_knowledge=result.imported_knowledge
+            imported_knowledge=result.imported_knowledge,
+            document_id=result.document_id
         )
     except Exception as e:
         logger.error(f"导入文件失败: {e}")
@@ -159,3 +194,51 @@ async def preview_file(
     except Exception as e:
         logger.error(f"预览文件失败: {e}")
         raise HTTPException(status_code=500, detail=f"预览失败: {str(e)}")
+
+
+@router.get("/documents", response_model=List[DocumentResponse])
+async def list_documents():
+    try:
+        docs = document_manager.get_all_documents()
+        return [DocumentResponse(**doc) for doc in docs]
+    except Exception as e:
+        logger.error(f"获取文档列表失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取失败: {str(e)}")
+
+
+@router.get("/documents/{doc_id}", response_model=DocumentDetailResponse)
+async def get_document(doc_id: str):
+    try:
+        doc = document_manager.get_document(doc_id)
+        if not doc:
+            raise HTTPException(status_code=404, detail="文档不存在")
+        return DocumentDetailResponse(**doc)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取文档失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取失败: {str(e)}")
+
+
+@router.delete("/documents/{doc_id}")
+async def delete_document(doc_id: str):
+    try:
+        success = document_manager.delete_document(doc_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="文档不存在")
+        return {"success": True, "message": "文档已删除"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"删除文档失败: {e}")
+        raise HTTPException(status_code=500, detail=f"删除失败: {str(e)}")
+
+
+@router.get("/documents/stats", response_model=DocumentStatsResponse)
+async def get_document_stats():
+    try:
+        stats = document_manager.get_document_stats()
+        return DocumentStatsResponse(**stats)
+    except Exception as e:
+        logger.error(f"获取文档统计失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取失败: {str(e)}")

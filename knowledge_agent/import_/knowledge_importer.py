@@ -1,11 +1,17 @@
 import re
 import logging
+import os
+import json
+import uuid
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
-import uuid
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+DOCUMENTS_DIR = Path(__file__).parent.parent.parent / "data" / "imported_documents"
+DOCUMENTS_META_FILE = DOCUMENTS_DIR / "documents_meta.json"
 
 
 @dataclass
@@ -25,6 +31,91 @@ class ImportResult:
     skipped_count: int = 0
     errors: List[str] = field(default_factory=list)
     imported_knowledge: List[Dict[str, Any]] = field(default_factory=list)
+    document_id: Optional[str] = None
+
+
+class DocumentManager:
+    def __init__(self):
+        DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
+        self.meta_file = DOCUMENTS_META_FILE
+        self._ensure_meta_file()
+    
+    def _ensure_meta_file(self):
+        if not self.meta_file.exists():
+            with open(self.meta_file, 'w', encoding='utf-8') as f:
+                json.dump({"documents": []}, f, ensure_ascii=False, indent=2)
+    
+    def _read_meta(self) -> Dict:
+        with open(self.meta_file, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    
+    def _write_meta(self, data: Dict):
+        with open(self.meta_file, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    
+    def save_document(self, filename: str, content: str, import_result: ImportResult) -> str:
+        doc_id = str(uuid.uuid4())
+        doc_file = DOCUMENTS_DIR / f"{doc_id}.md"
+        
+        with open(doc_file, 'w', encoding='utf-8') as f:
+            f.write(content)
+        
+        meta = self._read_meta()
+        doc_meta = {
+            "id": doc_id,
+            "filename": filename,
+            "original_filename": filename,
+            "file_size": len(content),
+            "imported_at": datetime.now().isoformat(),
+            "imported_count": import_result.imported_count,
+            "skipped_count": import_result.skipped_count,
+            "total_sections": import_result.total_sections,
+            "knowledge_ids": [k["id"] for k in import_result.imported_knowledge],
+            "errors": import_result.errors[:5]
+        }
+        meta["documents"].append(doc_meta)
+        self._write_meta(meta)
+        
+        return doc_id
+    
+    def get_all_documents(self) -> List[Dict]:
+        meta = self._read_meta()
+        return sorted(meta["documents"], key=lambda x: x["imported_at"], reverse=True)
+    
+    def get_document(self, doc_id: str) -> Optional[Dict]:
+        meta = self._read_meta()
+        for doc in meta["documents"]:
+            if doc["id"] == doc_id:
+                doc_file = DOCUMENTS_DIR / f"{doc_id}.md"
+                if doc_file.exists():
+                    with open(doc_file, 'r', encoding='utf-8') as f:
+                        doc["content"] = f.read()
+                return doc
+        return None
+    
+    def delete_document(self, doc_id: str) -> bool:
+        meta = self._read_meta()
+        for i, doc in enumerate(meta["documents"]):
+            if doc["id"] == doc_id:
+                doc_file = DOCUMENTS_DIR / f"{doc_id}.md"
+                if doc_file.exists():
+                    doc_file.unlink()
+                meta["documents"].pop(i)
+                self._write_meta(meta)
+                return True
+        return False
+    
+    def get_document_stats(self) -> Dict:
+        meta = self._read_meta()
+        docs = meta["documents"]
+        return {
+            "total_documents": len(docs),
+            "total_knowledge": sum(d["imported_count"] for d in docs),
+            "total_size": sum(d["file_size"] for d in docs)
+        }
+
+
+document_manager = DocumentManager()
 
 
 class KnowledgeImporter:
@@ -39,7 +130,8 @@ class KnowledgeImporter:
         filename: str = "",
         catalog_id: Optional[str] = None,
         auto_create_catalog: bool = True,
-        use_llm_analysis: bool = True
+        use_llm_analysis: bool = True,
+        save_document: bool = True
     ) -> ImportResult:
         result = ImportResult(success=True)
         
@@ -83,11 +175,15 @@ class KnowledgeImporter:
                         })
                     else:
                         result.skipped_count += 1
+                        logger.debug(f"跳过空内容章节: {section.question}")
                         
                 except Exception as e:
                     logger.error(f"导入知识失败: {e}")
                     result.errors.append(str(e))
                     result.skipped_count += 1
+            
+            if save_document and result.imported_count > 0:
+                result.document_id = document_manager.save_document(filename, content, result)
                     
         except Exception as e:
             logger.error(f"解析Markdown失败: {e}")
@@ -138,6 +234,7 @@ class KnowledgeImporter:
                     if answer:
                         current_section.answer = answer
                         sections.append(current_section)
+                    current_content = []
                 
                 current_path = current_path[:level-1]
                 current_path.append(title)
@@ -147,23 +244,34 @@ class KnowledgeImporter:
                     answer="",
                     section_path=current_path.copy()
                 )
-                current_content = []
             else:
                 if current_section:
                     current_content.append(line)
                 elif line.strip():
-                    current_section = ParsedKnowledge(
-                        question="概述",
-                        answer=line,
-                        section_path=["概述"]
-                    )
-                    current_content = [line]
+                    if not current_section:
+                        current_section = ParsedKnowledge(
+                            question="概述",
+                            answer="",
+                            section_path=["概述"]
+                        )
+                    current_content.append(line)
         
         if current_section and current_content:
             answer = '\n'.join(current_content).strip()
             if answer:
                 current_section.answer = answer
                 sections.append(current_section)
+        
+        if not sections:
+            paragraphs = [p.strip() for p in content.split('\n\n') if p.strip()]
+            for i, para in enumerate(paragraphs):
+                if len(para) > 20:
+                    first_line = para.split('\n')[0][:50]
+                    sections.append(ParsedKnowledge(
+                        question=first_line if first_line else f"知识点 {i+1}",
+                        answer=para,
+                        section_path=["导入内容"]
+                    ))
         
         return sections
 
@@ -201,17 +309,15 @@ class KnowledgeImporter:
         auto_create_catalog: bool,
         use_llm_analysis: bool
     ) -> Optional[Dict[str, Any]]:
-        if not section.answer.strip():
+        if not section.answer or not section.answer.strip():
             return None
         
         question = section.question
         answer = section.answer.strip()
-        keywords = section.keywords.copy()
+        keywords = section.keywords.copy() if section.keywords else []
         catalog_id = root_catalog_id
         
         if len(section.section_path) > 1 and auto_create_catalog and self.catalog_manager:
-            sub_catalog_name = section.section_path[-2] if len(section.section_path) >= 2 else section.section_path[0]
-            
             parent_id = root_catalog_id
             for path_item in section.section_path[:-1]:
                 catalog_id = self._get_or_create_catalog(path_item, parent_id)

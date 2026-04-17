@@ -100,6 +100,15 @@
           <span class="nav-icon">⚙️</span>
           <span class="nav-text">配置</span>
         </div>
+        
+        <div 
+          class="nav-item" 
+          :class="{ active: activeTab === 'documents' }"
+          @click="selectTab('documents')"
+        >
+          <span class="nav-icon">📄</span>
+          <span class="nav-text">文档管理</span>
+        </div>
       </nav>
 
       <div class="sidebar-footer">
@@ -122,6 +131,7 @@
         <ReviewView v-else-if="activeTab === 'review'" key="review" />
         <ReflectionView v-else-if="activeTab === 'reflection'" key="reflection" />
         <ConfigView v-else-if="activeTab === 'config'" key="config" />
+        <DocumentsView v-else-if="activeTab === 'documents'" key="documents" />
       </transition>
     </main>
   </div>
@@ -140,6 +150,7 @@ const ReviewView = defineAsyncComponent(() => import('./views/ReviewView.vue'))
 const ReflectionView = defineAsyncComponent(() => import('./views/ReflectionView.vue'))
 const ConfigView = defineAsyncComponent(() => import('./views/ConfigView.vue'))
 const AnalysisView = defineAsyncComponent(() => import('./views/AnalysisView.vue'))
+const DocumentsView = defineAsyncComponent(() => import('./views/DocumentsView.vue'))
 
 const activeTab = ref('chat')
 const theme = ref('light')

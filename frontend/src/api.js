@@ -610,6 +610,22 @@ export const importApi = {
       catalog_id: options.catalog_id || null,
       split_by: options.split_by || 'paragraph'
     })
+  },
+
+  getDocuments() {
+    return api.get('/import/documents')
+  },
+
+  getDocument(docId) {
+    return api.get(`/import/documents/${docId}`)
+  },
+
+  deleteDocument(docId) {
+    return api.delete(`/import/documents/${docId}`)
+  },
+
+  getDocumentStats() {
+    return api.get('/import/documents/stats')
   }
 }
 
