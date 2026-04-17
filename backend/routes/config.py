@@ -40,13 +40,17 @@ class AppConfigUpdate(BaseModel):
 
 
 def mask_secret(value: str) -> str:
-    if not value or len(value) <= 8:
-        return "****" if value else ""
-    return value[:3] + "****" + value[-4:]
+    if not value:
+        return ""
+    if len(value) <= 4:
+        return "****"
+    return "****" + value[-4:]
 
 
 def is_masked(value: str) -> bool:
-    return "****" in value
+    if not value:
+        return False
+    return value.startswith("****") and len(value) > 4 and value[4:].isalnum()
 
 
 def get_env_file_path() -> Path:

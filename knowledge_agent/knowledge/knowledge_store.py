@@ -64,6 +64,8 @@ class KnowledgeStore:
         if item:
             old_question = item.question
             old_answer = item.answer
+            old_keywords = item.keywords.copy() if item.keywords else []
+            old_sources = item.sources.copy() if item.sources else []
             old_catalog_id = item.catalog_id
             
             if question is not None:
@@ -81,6 +83,8 @@ class KnowledgeStore:
                 logger.error(f"向量存储更新失败 {knowledge_id}: {e}")
                 item.question = old_question
                 item.answer = old_answer
+                item.keywords = old_keywords
+                item.sources = old_sources
                 item.catalog_id = old_catalog_id
                 self.json_storage.update_item(item)
         return item
