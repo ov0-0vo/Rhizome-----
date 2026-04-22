@@ -57,10 +57,13 @@ class DocumentManager:
         doc_id = str(uuid.uuid4())
         doc_file = DOCUMENTS_DIR / f"{doc_id}.md"
         
-        with open(doc_file, 'w', encoding='utf-8') as f:
-            f.write(content)
+        try:
+            with open(doc_file, 'w', encoding='utf-8') as f:
+                f.write(content)
+        except IOError as e:
+            logger.error(f"保存文档文件失败: {e}")
+            raise
         
-        meta = self._read_meta()
         doc_meta = {
             "id": doc_id,
             "filename": filename,
@@ -73,8 +76,16 @@ class DocumentManager:
             "knowledge_ids": [k["id"] for k in import_result.imported_knowledge],
             "errors": import_result.errors[:5]
         }
-        meta["documents"].append(doc_meta)
-        self._write_meta(meta)
+        
+        try:
+            meta = self._read_meta()
+            meta["documents"].append(doc_meta)
+            self._write_meta(meta)
+        except Exception as e:
+            logger.error(f"保存文档元数据失败: {e}")
+            if doc_file.exists():
+                doc_file.unlink()
+            raise
         
         return doc_id
     
@@ -88,8 +99,12 @@ class DocumentManager:
             if doc["id"] == doc_id:
                 doc_file = DOCUMENTS_DIR / f"{doc_id}.md"
                 if doc_file.exists():
-                    with open(doc_file, 'r', encoding='utf-8') as f:
-                        doc["content"] = f.read()
+                    try:
+                        with open(doc_file, 'r', encoding='utf-8') as f:
+                            doc["content"] = f.read()
+                    except IOError as e:
+                        logger.error(f"读取文档文件失败 {doc_id}: {e}")
+                        doc["content"] = None
                 return doc
         return None
     
@@ -99,7 +114,10 @@ class DocumentManager:
             if doc["id"] == doc_id:
                 doc_file = DOCUMENTS_DIR / f"{doc_id}.md"
                 if doc_file.exists():
-                    doc_file.unlink()
+                    try:
+                        doc_file.unlink()
+                    except IOError as e:
+                        logger.error(f"删除文档文件失败 {doc_id}: {e}")
                 meta["documents"].pop(i)
                 self._write_meta(meta)
                 return True

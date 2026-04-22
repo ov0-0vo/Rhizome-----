@@ -109,6 +109,15 @@
           <span class="nav-icon">📄</span>
           <span class="nav-text">文档管理</span>
         </div>
+        
+        <div 
+          class="nav-item" 
+          :class="{ active: activeTab === 'md-knowledge' }"
+          @click="selectTab('md-knowledge')"
+        >
+          <span class="nav-icon">📝</span>
+          <span class="nav-text">MD知识库</span>
+        </div>
       </nav>
 
       <div class="sidebar-footer">
@@ -132,6 +141,7 @@
         <ReflectionView v-else-if="activeTab === 'reflection'" key="reflection" />
         <ConfigView v-else-if="activeTab === 'config'" key="config" />
         <DocumentsView v-else-if="activeTab === 'documents'" key="documents" />
+        <MdKnowledgeView v-else-if="activeTab === 'md-knowledge'" key="md-knowledge" />
       </transition>
     </main>
   </div>
@@ -151,6 +161,7 @@ const ReflectionView = defineAsyncComponent(() => import('./views/ReflectionView
 const ConfigView = defineAsyncComponent(() => import('./views/ConfigView.vue'))
 const AnalysisView = defineAsyncComponent(() => import('./views/AnalysisView.vue'))
 const DocumentsView = defineAsyncComponent(() => import('./views/DocumentsView.vue'))
+const MdKnowledgeView = defineAsyncComponent(() => import('./views/MdKnowledgeView.vue'))
 
 const activeTab = ref('chat')
 const theme = ref('light')
